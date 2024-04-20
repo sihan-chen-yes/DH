@@ -1,6 +1,6 @@
-name: 3dgs-avatar
+name: 3dgs
 channels:
-  - pytorch3d
+#  - pytorch3d
   - pytorch
   - iopath
   - fvcore
@@ -12,18 +12,18 @@ dependencies:
   - fvcore=0.1.5
   - iopath=0.1.9
   - plyfile=0.8.1
-  - python=3.7.13
+  - python=3.10
   - pip=22.3.1
-  - pytorch=1.12.1
-  - pytorch3d=0.7.1
-  - torchaudio=0.12.1
+  - pytorch=1.13.1
+#  - pytorch3d=0.7.1
+  - torchaudio=0.13.1
   - torchmetrics=0.11.4
-  - torchvision=0.13.1
+  - torchvision=0.14.1
   - trimesh=3.23.5
   - tqdm
   - pip:
-      - submodules/diff-gaussian-rasterization
-      - submodules/simple-knn
+#      - submodules/diff-gaussian-rasterization
+#      - submodules/simple-knn
       - hydra-core==1.3.2
       - libigl==2.4.1
       - imageio==2.31.2
