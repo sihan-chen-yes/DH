@@ -42,5 +42,6 @@ opt:
 #  lambda_nr_scale: 1e-4
   lambda_nr_scale: 0.
   lambda_nr_rot: 0.
+  lambda_nr_lipshitz_bound: 1e-4
   non_rigid_lr: 1e-3
   nr_latent_lr: 1e-3

@@ -7,6 +7,7 @@ from models.network_utils import (HierarchicalPoseEncoder,
                                   HannwCondMLP,
                                   HashGrid)
 from utils.general_utils import quaternion_multiply
+from models.deformer.lipschitzMLP import LipshitzMLP
 
 class NonRigidDeform(nn.Module):
     def __init__(self, cfg):
@@ -43,6 +44,7 @@ class MLP(NonRigidDeform):
 
         # output dimension: position + scale + rotation
         self.mlp = VanillaCondMLP(d_in, d_cond, d_out, cfg.mlp)
+        # self.mlp = LipshitzMLP(d_in + d_cond, [128,64,3], d_out = d_out, last_layer_linear=False)
         self.aabb = metadata['aabb']
 
         self.delay = cfg.get('delay', 0)
@@ -207,7 +209,8 @@ class HashGridwithMLP(NonRigidDeform):
 
         self.aabb = metadata['aabb']
         self.hashgrid = HashGrid(cfg.hashgrid)
-        self.mlp = VanillaCondMLP(self.hashgrid.n_output_dims, d_cond, d_out, cfg.mlp)
+        # self.mlp = VanillaCondMLP(self.hashgrid.n_output_dims, d_cond, d_out, cfg.mlp)
+        self.mlp = LipshitzMLP(self.hashgrid.n_output_dims + d_cond, [128,64,d_out], last_layer_linear=False)
 
         self.delay = cfg.get('delay', 0)
 
@@ -238,7 +241,8 @@ class HashGridwithMLP(NonRigidDeform):
         xyz_norm = self.aabb.normalize(xyz, sym=True)
         deformed_gaussians = gaussians.clone()
         feature = self.hashgrid(xyz_norm)
-        deltas = self.mlp(feature, cond=pose_feat)
+        # deltas = self.mlp(feature, cond=pose_feat)
+        deltas = self.mlp(torch.cat([feature, pose_feat.expand(feature.shape[0], -1)], dim= -1))
 
         delta_xyz = deltas[:, :3]
         delta_scale = deltas[:, 3:6]
@@ -278,10 +282,12 @@ class HashGridwithMLP(NonRigidDeform):
             loss_xyz = torch.norm(delta_xyz, p=2, dim=1).mean()
             loss_scale = torch.norm(delta_scale, p=1, dim=1).mean()
             loss_rot = torch.norm(delta_rot, p=1, dim=1).mean()
+            loss_lipschitz = self.mlp.lipshitz_bound_full().mean()
             loss_reg = {
                 'nr_xyz': loss_xyz,
                 'nr_scale': loss_scale,
-                'nr_rot': loss_rot
+                'nr_rot': loss_rot,
+                'nr_lipshitz_bound': loss_lipschitz,
             }
         else:
             loss_reg = {}

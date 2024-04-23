@@ -153,7 +153,7 @@ def main(config):
 
     config.exp_dir = config.get('exp_dir') or os.path.join('./exp', config.name)
     os.makedirs(config.exp_dir, exist_ok=True)
-
+    config.dataset.root_dir = '/cluster/courses/digital_humans/datasets/team_8/ZJUMoCap'
     # set wandb logger
     if config.mode == 'test':
         config.suffix = config.mode + '-' + config.dataset.test_mode
@@ -182,6 +182,7 @@ def main(config):
         mode="disabled" if config.wandb_disable else None,
         name=wandb_name,
         project='gaussian-splatting-avatar-test',
+        entity='digital-human-s24',
         # entity='fast-avatar',
         dir=config.exp_dir,
         config=OmegaConf.to_container(config, resolve=True),
