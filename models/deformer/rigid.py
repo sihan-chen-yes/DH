@@ -7,7 +7,7 @@ import pytorch3d.ops as ops
 import trimesh
 import igl
 
-from utils.general_utils import build_rotation
+from utils.general_utils import build_rotation, rotation_matrix_to_quaternion
 from models.network_utils import get_skinning_mlp
 
 class RigidDeform(nn.Module):
@@ -64,9 +64,10 @@ class SMPLNN(RigidDeform):
 
         rotation_hat = build_rotation(gaussians._rotation)
         rotation_bar = torch.matmul(T_fwd[:, :3, :3], rotation_hat)
-        setattr(deformed_gaussians, 'rotation_precomp', rotation_bar)
+
+        # setattr(deformed_gaussians, 'rotation_precomp', rotation_bar)
         # deformed_gaussians._rotation = tf.matrix_to_quaternion(rotation_bar)
-        # deformed_gaussians._rotation = rotation_matrix_to_quaternion(rotation_bar)
+        deformed_gaussians._rotation = rotation_matrix_to_quaternion(rotation_bar)
 
         return deformed_gaussians
 
@@ -230,9 +231,10 @@ class SkinningField(RigidDeform):
 
         rotation_hat = build_rotation(gaussians._rotation)
         rotation_bar = torch.matmul(T_fwd[:, :3, :3], rotation_hat)
-        setattr(deformed_gaussians, 'rotation_precomp', rotation_bar)
+        # setattr(deformed_gaussians, 'rotation_precomp', rotation_bar)
+
         # deformed_gaussians._rotation = tf.matrix_to_quaternion(rotation_bar)
-        # deformed_gaussians._rotation = rotation_matrix_to_quaternion(rotation_bar)
+        deformed_gaussians._rotation = rotation_matrix_to_quaternion(rotation_bar)
 
         return deformed_gaussians
 
