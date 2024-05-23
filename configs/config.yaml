@@ -77,6 +77,10 @@ opt:
   lambda_aiap_xyz: 1.
   lambda_aiap_cov: 100.
 
+  #2dgs
+  lambda_normal: 0.05
+  lambda_dist: 1000
+
   # densification configs
   percent_dense: 0.01
   densification_interval: 100
