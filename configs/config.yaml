@@ -95,6 +95,11 @@ pipeline:
   compute_cov3D_python: false
   debug: false
   depth_ratio: 1.0 # todo: adjust
+  num_cluster: 1
+  voxel_size: 0.004
+  sdf_trunc: 0.016
+  depth_trunc: 3.0
+  mesh_res: 1024
 
   pose_noise: 0.1
 
@@ -106,7 +111,7 @@ save_iterations: [30000]
 seed: -1
 checkpoint_iterations: []
 start_checkpoint: null
-wandb_disable: false
+wandb_disable: true
 
 mode: train
 load_ckpt: null

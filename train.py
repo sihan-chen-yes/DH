@@ -21,6 +21,9 @@ from scene import Scene, GaussianModel
 from utils.general_utils import fix_random, Evaluator, PSEvaluator
 from tqdm import tqdm
 from utils.loss_utils import full_aiap_loss
+from utils.general_utils import colormap
+from utils.mesh_utils import GaussianExtractor, to_cam_open3d, post_process_mesh
+import open3d as o3d
 
 import hydra
 from omegaconf import OmegaConf
@@ -182,8 +185,8 @@ def training(config):
         loss_normal = normal_error.mean()
         loss_dist = rend_dist.mean()
 
-        # loss += lambda_normal * loss_normal
-        # loss += lambda_dist * loss_dist
+        loss += lambda_normal * loss_normal
+        loss += lambda_dist * loss_dist
 
         # regularization
         loss_reg = render_pkg["loss_reg"]
@@ -226,6 +229,7 @@ def training(config):
 
             # Log and save
             validation(iteration, testing_iterations, testing_interval, scene, evaluator,(pipe, background))
+            extract_mesh(iteration, testing_iterations, testing_interval, gaussians, scene, dataset, pipe, config.exp_dir)
             if (iteration in saving_iterations):
                 print("\n[ITER {}] Saving Gaussians".format(iteration))
                 scene.save(iteration)
@@ -279,10 +283,17 @@ def validation(iteration, testing_iterations, testing_interval, scene : Scene, e
                 opacity_image = torch.clamp(render_pkg["opacity_render"], 0.0, 1.0)
 
                 #2dgs
-                rend_normal_image = torch.clamp(render_pkg["rend_normal"], 0.0, 1.0)
-                rend_dist_image = torch.clamp(render_pkg["rend_dist"], 0.0, 1.0)
-                surf_depth_image = torch.clamp(render_pkg["surf_depth"], 0.0, 1.0)
-                surf_normal_image = torch.clamp(render_pkg["surf_normal"], 0.0, 1.0)
+                rend_normal_image = render_pkg["rend_normal"] * 0.5 + 0.5
+
+                rend_dist_image = render_pkg["rend_dist"]
+                rend_dist_image = colormap(rend_dist_image.cpu().numpy()[0])
+
+                surf_depth_image = render_pkg["surf_depth"]
+                norm = surf_depth_image.max()
+                surf_depth_image = surf_depth_image / norm
+                surf_depth_image = colormap(surf_depth_image.cpu().numpy()[0], cmap='turbo')
+
+                surf_normal_image = render_pkg["surf_normal"] * 0.5 + 0.5
 
                 wandb_img = wandb.Image(opacity_image[None],
                                         caption=config['name'] + "_view_{}/render_opacity".format(data.image_name))
@@ -302,7 +313,6 @@ def validation(iteration, testing_iterations, testing_interval, scene : Scene, e
                 examples.append(wandb_img)
                 wandb_img = wandb.Image(surf_normal_image[None], caption=config['name'] + "_view_{}/surf_normal_image".format(data.image_name))
                 examples.append(wandb_img)
-
 
                 l1_test += l1_loss(image, gt_image).mean().double()
                 metrics_test = evaluator(image, gt_image)
@@ -329,6 +339,37 @@ def validation(iteration, testing_iterations, testing_interval, scene : Scene, e
     wandb.log({'total_points': scene.gaussians.get_xyz.shape[0]})
     torch.cuda.empty_cache()
     scene.train()
+
+def extract_mesh(iteration, testing_iterations, testing_interval, gaussians, scene, dataset, pipe, train_dir):
+    if testing_interval > 0:
+        if not iteration % testing_interval == 0:
+            return
+    else:
+        if not iteration in testing_iterations:
+            return
+
+    bg_color = [1,1,1] if dataset.white_background else [0, 0, 0]
+    gaussExtractor = GaussianExtractor(gaussians, scene, render, pipe, bg_color=bg_color)
+
+    print("export mesh ...")
+    os.makedirs(train_dir, exist_ok=True)
+    # set the active_sh to 0 to export only diffuse texture
+    gaussExtractor.gaussians.active_sh_degree = 0
+    gaussExtractor.reconstruction(scene.train_dataset)
+    # extract the mesh and save
+
+    name = 'fuse.ply'
+    depth_trunc = (gaussExtractor.radius * 2.0) if pipe.depth_trunc < 0 else pipe.depth_trunc
+    voxel_size = (depth_trunc / pipe.mesh_res) if pipe.voxel_size < 0 else pipe.voxel_size
+    sdf_trunc = 5.0 * voxel_size if pipe.sdf_trunc < 0 else pipe.sdf_trunc
+    mesh = gaussExtractor.extract_mesh_bounded(voxel_size=voxel_size, sdf_trunc=sdf_trunc, depth_trunc=depth_trunc)
+
+    o3d.io.write_triangle_mesh(os.path.join(train_dir, name), mesh)
+    print("mesh saved at {}".format(os.path.join(train_dir, name)))
+    # post-process the mesh and save, saving the largest N clusters
+    mesh_post = post_process_mesh(mesh, cluster_to_keep=pipe.num_cluster)
+    o3d.io.write_triangle_mesh(os.path.join(train_dir, name.replace('.ply', '_post.ply')), mesh_post)
+    print("mesh post processed saved at {}".format(os.path.join(train_dir, name.replace('.ply', '_post.ply'))))
 
 @hydra.main(version_base=None, config_path="configs", config_name="config")
 def main(config):

@@ -173,6 +173,7 @@ def render(data,
             "loss_reg": loss_reg,
             "opacity_render": opacity_image,
 
+            'rend_alpha': opacity_image,
             'rend_normal': render_normal,
             'rend_dist': render_dist,
             'surf_depth': surf_depth,
