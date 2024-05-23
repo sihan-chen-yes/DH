@@ -1,10 +1,10 @@
 defaults:
   - _self_
   - dataset: zjumocap_377_mono
-  - pose_correction: direct
-  - texture: shallow_mlp
-  - rigid: skinning_field
-  - non_rigid: hashgrid
+  - pose_correction: none
+  - texture: sh
+  - rigid: identity
+  - non_rigid: identity
   - option:
       - iter15k
 

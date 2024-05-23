@@ -8,7 +8,7 @@ model:
     sh_degree: 3
   texture:
     name: sh2rgb
-    cano_view_dir: true
+    cano_view_dir: false
     view_noise: 45
 
     non_rigid_dim: 0
