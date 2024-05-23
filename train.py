@@ -169,6 +169,22 @@ def training(config):
         loss += lambda_aiap_xyz * loss_aiap_xyz
         loss += lambda_aiap_cov * loss_aiap_cov
 
+        # 2dgs regularization
+        #TODO iteration adjust
+        lambda_normal = config.opt.lambda_normal if iteration > 7000 else 0.0
+        lambda_dist = config.opt.lambda_dist if iteration > 3000 else 0.0
+
+        rend_dist = render_pkg["rend_dist"]
+        rend_normal = render_pkg['rend_normal']
+        surf_normal = render_pkg['surf_normal']
+        normal_error = (1 - (rend_normal * surf_normal).sum(dim=0))[None]
+
+        loss_normal = normal_error.mean()
+        loss_dist = rend_dist.mean()
+
+        # loss += lambda_normal * loss_normal
+        # loss += lambda_dist * loss_dist
+
         # regularization
         loss_reg = render_pkg["loss_reg"]
         for name, value in loss_reg.items():
@@ -190,6 +206,8 @@ def training(config):
                 'loss/loss_skinning': loss_skinning.item(),
                 'loss/xyz_aiap_loss': loss_aiap_xyz.item(),
                 'loss/cov_aiap_loss': loss_aiap_cov.item(),
+                # 'loss/normal_loss': loss_normal.item(),
+                # 'loss/dist_loss': loss_dist.item(),
                 'loss/total_loss': loss.item(),
                 'iter_time': elapsed,
             }
@@ -260,6 +278,11 @@ def validation(iteration, testing_iterations, testing_interval, scene : Scene, e
                 gt_image = torch.clamp(data.original_image.to("cuda"), 0.0, 1.0)
                 opacity_image = torch.clamp(render_pkg["opacity_render"], 0.0, 1.0)
 
+                #2dgs
+                rend_normal_image = torch.clamp(render_pkg["rend_normal"], 0.0, 1.0)
+                rend_dist_image = torch.clamp(render_pkg["rend_dist"], 0.0, 1.0)
+                surf_depth_image = torch.clamp(render_pkg["surf_depth"], 0.0, 1.0)
+                surf_normal_image = torch.clamp(render_pkg["surf_normal"], 0.0, 1.0)
 
                 wandb_img = wandb.Image(opacity_image[None],
                                         caption=config['name'] + "_view_{}/render_opacity".format(data.image_name))
@@ -269,6 +292,17 @@ def validation(iteration, testing_iterations, testing_interval, scene : Scene, e
                 wandb_img = wandb.Image(gt_image[None], caption=config['name'] + "_view_{}/ground_truth".format(
                     data.image_name))
                 examples.append(wandb_img)
+
+                #2dgs
+                wandb_img = wandb.Image(rend_normal_image[None], caption=config['name'] + "_view_{}/rend_normal_image".format(data.image_name))
+                examples.append(wandb_img)
+                wandb_img = wandb.Image(rend_dist_image[None], caption=config['name'] + "_view_{}/rend_dist_image".format(data.image_name))
+                examples.append(wandb_img)
+                wandb_img = wandb.Image(surf_depth_image[None], caption=config['name'] + "_view_{}/surf_depth_image".format(data.image_name))
+                examples.append(wandb_img)
+                wandb_img = wandb.Image(surf_normal_image[None], caption=config['name'] + "_view_{}/surf_normal_image".format(data.image_name))
+                examples.append(wandb_img)
+
 
                 l1_test += l1_loss(image, gt_image).mean().double()
                 metrics_test = evaluator(image, gt_image)
