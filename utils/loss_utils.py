@@ -71,7 +71,9 @@ def full_aiap_loss(gs_can, gs_obs, n_neighbors=5):
     xyz_obs = gs_obs.get_xyz
 
     cov_can = gs_can.get_covariance()
+    cov_can[:, :, -1] = 0
     cov_obs = gs_obs.get_covariance()
+    cov_obs[:, :, -1] = 0
 
     _, nn_ix, _ = knn_points(xyz_can.unsqueeze(0),
                              xyz_can.unsqueeze(0),

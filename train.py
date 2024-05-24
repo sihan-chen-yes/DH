@@ -229,7 +229,7 @@ def training(config):
 
             # Log and save
             validation(iteration, testing_iterations, testing_interval, scene, evaluator,(pipe, background))
-            extract_mesh(iteration, testing_iterations, testing_interval, gaussians, scene, dataset, pipe, config.exp_dir)
+            # extract_mesh(iteration, testing_iterations, testing_interval, gaussians, scene, dataset, pipe, config.exp_dir)
             if (iteration in saving_iterations):
                 print("\n[ITER {}] Saving Gaussians".format(iteration))
                 scene.save(iteration)
@@ -367,9 +367,9 @@ def extract_mesh(iteration, testing_iterations, testing_interval, gaussians, sce
     o3d.io.write_triangle_mesh(os.path.join(train_dir, name), mesh)
     print("mesh saved at {}".format(os.path.join(train_dir, name)))
     # post-process the mesh and save, saving the largest N clusters
-    # mesh_post = post_process_mesh(mesh, cluster_to_keep=pipe.num_cluster)
-    # o3d.io.write_triangle_mesh(os.path.join(train_dir, name.replace('.ply', '_post.ply')), mesh_post)
-    # print("mesh post processed saved at {}".format(os.path.join(train_dir, name.replace('.ply', '_post.ply'))))
+    mesh_post = post_process_mesh(mesh, cluster_to_keep=pipe.num_cluster)
+    o3d.io.write_triangle_mesh(os.path.join(train_dir, name.replace('.ply', '_post.ply')), mesh_post)
+    print("mesh post processed saved at {}".format(os.path.join(train_dir, name.replace('.ply', '_post.ply'))))
 
 @hydra.main(version_base=None, config_path="configs", config_name="config")
 def main(config):
@@ -388,7 +388,7 @@ def main(config):
         mode="disabled" if config.wandb_disable else None,
         name=wandb_name,
         entity='digital-human-s24',
-        project='gaussian-splatting-avatar-2d-gs-debug-ym-normal-loss',
+        project='gaussian-splatting-avatar-2d-gs-debug',
         # entity='fast-avatar',
         dir=config.exp_dir,
         config=OmegaConf.to_container(config, resolve=True),

@@ -209,8 +209,8 @@ class HashGridwithMLP(NonRigidDeform):
 
         self.aabb = metadata['aabb']
         self.hashgrid = HashGrid(cfg.hashgrid)
-        # self.mlp = VanillaCondMLP(self.hashgrid.n_output_dims, d_cond, d_out, cfg.mlp)
-        self.mlp = LipshitzMLP(self.hashgrid.n_output_dims + d_cond, [128,64,d_out], last_layer_linear=False)
+        self.mlp = VanillaCondMLP(self.hashgrid.n_output_dims, d_cond, d_out, cfg.mlp)
+        # self.mlp = LipshitzMLP(self.hashgrid.n_output_dims + d_cond, [128,64,d_out], last_layer_linear=False)
 
         self.delay = cfg.get('delay', 0)
 

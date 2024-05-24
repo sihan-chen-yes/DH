@@ -1,8 +1,8 @@
 defaults:
   - _self_
   - dataset: zjumocap_377_mono
-  - pose_correction: none
-  - texture: sh
+  - pose_correction: direct
+  - texture: shallow_mlp
   - rigid: smpl_nn
   - non_rigid: hashgrid
   - option:
@@ -78,8 +78,6 @@ opt:
   lambda_aiap_cov: 0.
 
   #2dgs
-  # lambda_normal: 0.00
-  # lambda_dist: 0.00
   lambda_normal: 0.1
   lambda_dist: 1000
 
