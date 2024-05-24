@@ -70,6 +70,7 @@ def render(data,
     scales = None
     rotations = None
     cov3D_precomp = None
+    # print("use compute_cov3D_python:", pipe.compute_cov3D_python)
     if pipe.compute_cov3D_python:
         # cov3D_precomp = pc.get_covariance(scaling_modifier)
         splat2world = pc.get_covariance(scaling_modifier)

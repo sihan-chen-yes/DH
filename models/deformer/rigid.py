@@ -231,10 +231,10 @@ class SkinningField(RigidDeform):
 
         rotation_hat = build_rotation(gaussians._rotation)
         rotation_bar = torch.matmul(T_fwd[:, :3, :3], rotation_hat)
-        setattr(deformed_gaussians, 'rotation_precomp', rotation_bar)
+        # setattr(deformed_gaussians, 'rotation_precomp', rotation_bar)
 
         # deformed_gaussians._rotation = tf.matrix_to_quaternion(rotation_bar)
-        # deformed_gaussians._rotation = rotation_matrix_to_quaternion(rotation_bar)
+        deformed_gaussians._rotation = rotation_matrix_to_quaternion(rotation_bar)
 
         return deformed_gaussians
 

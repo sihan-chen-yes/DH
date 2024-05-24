@@ -2,8 +2,8 @@ defaults:
   - _self_
   - dataset: zjumocap_377_mono
   - pose_correction: none
-  - texture: shallow_mlp
-  - rigid: skinning_field
+  - texture: sh
+  - rigid: smpl_nn
   - non_rigid: hashgrid
   - option:
       - iter15k
@@ -74,11 +74,13 @@ opt:
   lambda_opacity: 0.
   lambda_skinning: [10,1000,0.1]
   lambda_pose: 0.
-  lambda_aiap_xyz: 1.
-  lambda_aiap_cov: 100.
+  lambda_aiap_xyz: 0.
+  lambda_aiap_cov: 0.
 
   #2dgs
-  lambda_normal: 0.05
+  # lambda_normal: 0.00
+  # lambda_dist: 0.00
+  lambda_normal: 0.1
   lambda_dist: 1000
 
   # densification configs
