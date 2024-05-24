@@ -28,7 +28,7 @@ class GaussianModel:
             RS = build_scaling_rotation(torch.cat([scaling * scaling_modifier, torch.ones_like(scaling)], dim=-1), rotation).permute(0,2,1)
             trans = torch.zeros((center.shape[0], 4, 4), dtype=torch.float, device="cuda")
             trans[:,:3,:3] = RS
-            trans[:, 3,:3] = center
+            # trans[:, 3,:3] = center
             trans[:, 3, 3] = 1
             return trans
         

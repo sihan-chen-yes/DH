@@ -209,8 +209,8 @@ def training(config):
                 'loss/loss_skinning': loss_skinning.item(),
                 'loss/xyz_aiap_loss': loss_aiap_xyz.item(),
                 'loss/cov_aiap_loss': loss_aiap_cov.item(),
-                # 'loss/normal_loss': loss_normal.item(),
-                # 'loss/dist_loss': loss_dist.item(),
+                'loss/normal_loss': loss_normal.item(),
+                'loss/dist_loss': loss_dist.item(),
                 'loss/total_loss': loss.item(),
                 'iter_time': elapsed,
             }
@@ -355,7 +355,7 @@ def extract_mesh(iteration, testing_iterations, testing_interval, gaussians, sce
     os.makedirs(train_dir, exist_ok=True)
     # set the active_sh to 0 to export only diffuse texture
     gaussExtractor.gaussians.active_sh_degree = 0
-    gaussExtractor.reconstruction(scene.train_dataset)
+    gaussExtractor.reconstruction(scene.train_dataset, iteration)
     # extract the mesh and save
 
     name = 'fuse.ply'
@@ -388,7 +388,7 @@ def main(config):
         mode="disabled" if config.wandb_disable else None,
         name=wandb_name,
         entity='digital-human-s24',
-        project='gaussian-splatting-avatar-2d-gs-rotation_debug-1frame',
+        project='gaussian-splatting-avatar-2d-gs-debug',
         # entity='fast-avatar',
         dir=config.exp_dir,
         config=OmegaConf.to_container(config, resolve=True),

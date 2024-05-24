@@ -2,9 +2,9 @@ defaults:
   - _self_
   - dataset: zjumocap_377_mono
   - pose_correction: none
-  - texture: sh
-  - rigid: identity
-  - non_rigid: identity
+  - texture: shallow_mlp
+  - rigid: skinning_field
+  - non_rigid: hashgrid
   - option:
       - iter15k
 
@@ -111,7 +111,7 @@ save_iterations: [30000]
 seed: -1
 checkpoint_iterations: []
 start_checkpoint: null
-wandb_disable: true
+wandb_disable: false
 
 mode: train
 load_ckpt: null
