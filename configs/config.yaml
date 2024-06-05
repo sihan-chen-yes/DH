@@ -80,8 +80,7 @@ opt:
   lambda_aiap_cov: 0.001
 
   #2dgs
-  # lambda_normal: 0.00
-  # lambda_dist: 0.00
+  #TODO adjust
   lambda_normal: 0.1
   lambda_dist: 1000
 

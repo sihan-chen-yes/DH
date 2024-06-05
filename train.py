@@ -173,7 +173,7 @@ def training(config):
         loss += lambda_aiap_cov * loss_aiap_cov
 
         # 2dgs regularization
-        #TODO iteration adjust
+        #TODO iteration adjust iteration!
         lambda_normal = config.opt.lambda_normal if iteration > 7000 else 0.0
         lambda_dist = config.opt.lambda_dist if iteration > 3000 else 0.0
 
@@ -341,7 +341,7 @@ def validation(iteration, testing_iterations, testing_interval, scene : Scene, e
     torch.cuda.empty_cache()
     scene.train()
 
-def extract_mesh(iteration, testing_iterations, testing_interval, gaussians, scene, dataset, pipe, train_dir):
+def extract_mesh(iteration, testing_iterations, testing_interval, gaussians, scene, dataset_config, pipe, train_dir):
     if testing_interval > 0:
         if not iteration % testing_interval == 0:
             return
@@ -349,14 +349,14 @@ def extract_mesh(iteration, testing_iterations, testing_interval, gaussians, sce
         if not iteration in testing_iterations:
             return
 
-    bg_color = [1,1,1] if dataset.white_background else [0, 0, 0]
+    bg_color = [1,1,1] if dataset_config.white_background else [0, 0, 0]
     gaussExtractor = GaussianExtractor(gaussians, scene, render, pipe, bg_color=bg_color)
 
     print("export mesh ...")
     os.makedirs(train_dir, exist_ok=True)
     # set the active_sh to 0 to export only diffuse texture
     gaussExtractor.gaussians.active_sh_degree = 0
-    gaussExtractor.reconstruction(scene.train_dataset, iteration)
+    gaussExtractor.reconstruction(scene.test_dataset, iteration)
     # extract the mesh and save
 
     name = 'fuse.ply'
@@ -368,9 +368,9 @@ def extract_mesh(iteration, testing_iterations, testing_interval, gaussians, sce
     o3d.io.write_triangle_mesh(os.path.join(train_dir, name), mesh)
     print("mesh saved at {}".format(os.path.join(train_dir, name)))
     # post-process the mesh and save, saving the largest N clusters
-    # mesh_post = post_process_mesh(mesh, cluster_to_keep=pipe.num_cluster)
-    # o3d.io.write_triangle_mesh(os.path.join(train_dir, name.replace('.ply', '_post.ply')), mesh_post)
-    # print("mesh post processed saved at {}".format(os.path.join(train_dir, name.replace('.ply', '_post.ply'))))
+    mesh_post = post_process_mesh(mesh, cluster_to_keep=pipe.num_cluster)
+    o3d.io.write_triangle_mesh(os.path.join(train_dir, name.replace('.ply', '_post.ply')), mesh_post)
+    print("mesh post processed saved at {}".format(os.path.join(train_dir, name.replace('.ply', '_post.ply'))))
 
 @hydra.main(version_base=None, config_path="configs", config_name="config")
 def main(config):
@@ -389,7 +389,7 @@ def main(config):
         mode="disabled" if config.wandb_disable else None,
         name=wandb_name,
         entity='digital-human-s24',
-        project='gaussian-splatting-avatar-2d-gs-debug-ym-aiap',
+        project='gaussian-splatting-avatar-2d-gs-debug-ym-normal-loss',
         # entity='fast-avatar',
         dir=config.exp_dir,
         config=OmegaConf.to_container(config, resolve=True),

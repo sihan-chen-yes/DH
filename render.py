@@ -26,6 +26,9 @@ import hydra
 from omegaconf import OmegaConf
 import wandb
 
+from utils.general_utils import colormap
+
+
 def predict(config):
     with torch.set_grad_enabled(False):
         gaussians = GaussianModel(config.model.gaussian)
@@ -45,6 +48,9 @@ def predict(config):
         iter_start = torch.cuda.Event(enable_timing=True)
         iter_end = torch.cuda.Event(enable_timing=True)
         times = []
+
+        examples = []
+
         for idx in trange(len(scene.test_dataset), desc="Rendering progress"):
             view = scene.test_dataset[idx]
             iter_start.record()
@@ -57,8 +63,44 @@ def predict(config):
 
             rendering = render_pkg["render"]
 
-            wandb_img = [wandb.Image(rendering[None], caption='render_{}'.format(view.image_name)),]
-            wandb.log({'test_images': wandb_img})
+            opacity_image = torch.clamp(render_pkg["opacity_render"], 0.0, 1.0)
+
+            # 2dgs
+            rend_normal_image = render_pkg["rend_normal"] * 0.5 + 0.5
+
+            rend_dist_image = render_pkg["rend_dist"]
+            rend_dist_image = colormap(rend_dist_image.cpu().numpy()[0])
+
+            surf_depth_image = render_pkg["surf_depth"]
+            norm = surf_depth_image.max()
+            surf_depth_image = surf_depth_image / norm
+            surf_depth_image = colormap(surf_depth_image.cpu().numpy()[0], cmap='turbo')
+
+            surf_normal_image = render_pkg["surf_normal"] * 0.5 + 0.5
+
+            wandb_img = wandb.Image(opacity_image[None],
+                                    caption=config['name'] + "_view_{}/render_opacity".format(view.image_name))
+            examples.append(wandb_img)
+
+            wandb_img = wandb.Image(rendering[None], caption='render_{}'.format(view.image_name))
+            examples.append(wandb_img)
+
+            # 2dgs
+            wandb_img = wandb.Image(rend_normal_image[None],
+                                    caption=config['name'] + "_view_{}/rend_normal_image".format(view.image_name))
+            examples.append(wandb_img)
+            wandb_img = wandb.Image(rend_dist_image[None],
+                                    caption=config['name'] + "_view_{}/rend_dist_image".format(view.image_name))
+            examples.append(wandb_img)
+            wandb_img = wandb.Image(surf_depth_image[None],
+                                    caption=config['name'] + "_view_{}/surf_depth_image".format(view.image_name))
+            examples.append(wandb_img)
+            wandb_img = wandb.Image(surf_normal_image[None],
+                                    caption=config['name'] + "_view_{}/surf_normal_image".format(view.image_name))
+            examples.append(wandb_img)
+
+            wandb.log({config['name'] + "_images": examples})
+            examples.clear()
 
             torchvision.utils.save_image(rendering, os.path.join(render_path, f"render_{view.image_name}.png"))
 
@@ -97,6 +139,9 @@ def test(config):
         ssims = []
         lpipss = []
         times = []
+
+        examples = []
+
         for idx in trange(len(scene.test_dataset), desc="Rendering progress"):
             view = scene.test_dataset[idx]
             iter_start.record()
@@ -110,12 +155,49 @@ def test(config):
 
             rendering = render_pkg["render"]
 
+            opacity_image = torch.clamp(render_pkg["opacity_render"], 0.0, 1.0)
+
+            # 2dgs
+            rend_normal_image = render_pkg["rend_normal"] * 0.5 + 0.5
+
+            rend_dist_image = render_pkg["rend_dist"]
+            rend_dist_image = colormap(rend_dist_image.cpu().numpy()[0])
+
+            surf_depth_image = render_pkg["surf_depth"]
+            norm = surf_depth_image.max()
+            surf_depth_image = surf_depth_image / norm
+            surf_depth_image = colormap(surf_depth_image.cpu().numpy()[0], cmap='turbo')
+
+            surf_normal_image = render_pkg["surf_normal"] * 0.5 + 0.5
+
             gt = view.original_image[:3, :, :]
 
-            wandb_img = [wandb.Image(rendering[None], caption='render_{}'.format(view.image_name)),
-                         wandb.Image(gt[None], caption='gt_{}'.format(view.image_name))]
+            wandb_img = wandb.Image(opacity_image[None],
+                                    caption=config['name'] + "_view_{}/render_opacity".format(view.image_name))
+            examples.append(wandb_img)
 
-            wandb.log({'test_images': wandb_img})
+            wandb_img = wandb.Image(rendering[None], caption='render_{}'.format(view.image_name))
+            examples.append(wandb_img)
+
+            wandb_img = wandb.Image(gt[None], caption='gt_{}'.format(view.image_name))
+            examples.append(wandb_img)
+
+            # 2dgs
+            wandb_img = wandb.Image(rend_normal_image[None],
+                                    caption=config['name'] + "_view_{}/rend_normal_image".format(view.image_name))
+            examples.append(wandb_img)
+            wandb_img = wandb.Image(rend_dist_image[None],
+                                    caption=config['name'] + "_view_{}/rend_dist_image".format(view.image_name))
+            examples.append(wandb_img)
+            wandb_img = wandb.Image(surf_depth_image[None],
+                                    caption=config['name'] + "_view_{}/surf_depth_image".format(view.image_name))
+            examples.append(wandb_img)
+            wandb_img = wandb.Image(surf_normal_image[None],
+                                    caption=config['name'] + "_view_{}/surf_normal_image".format(view.image_name))
+            examples.append(wandb_img)
+
+            wandb.log({config['name'] + "_images": examples})
+            examples.clear()
 
             torchvision.utils.save_image(rendering, os.path.join(render_path, f"render_{view.image_name}.png"))
 
@@ -153,7 +235,7 @@ def main(config):
 
     config.exp_dir = config.get('exp_dir') or os.path.join('./exp', config.name)
     os.makedirs(config.exp_dir, exist_ok=True)
-    config.dataset.root_dir = '/cluster/courses/digital_humans/datasets/team_8/ZJUMoCap'
+    # config.dataset.root_dir = '/cluster/courses/digital_humans/datasets/team_8/ZJUMoCap'
     # set wandb logger
     if config.mode == 'test':
         config.suffix = config.mode + '-' + config.dataset.test_mode
