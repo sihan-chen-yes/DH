@@ -15,3 +15,5 @@ tools
 scripts
 SIBR_viewers
 snapshot_fw.dump
+exp/*
+*.gif

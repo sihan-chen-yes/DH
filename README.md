@@ -54,6 +54,8 @@
 srun --account digital_humans --time=05:00:30 --gpus=1 --pty bash
 conda activate 3dgs-avatar
 python train.py dataset=zjumocap_377_mono
+python train.py dataset=zjumocap_393_mono_half
+python train.py dataset=zjumocap_387_4views
 
 ### Novel_pose evaluation
 
@@ -94,4 +96,6 @@ Then run:
 
 ```Python
 python render.py mode=test dataset.test_mode=view dataset=zjumocap_386_mono_eval_novel
+python render.py mode=test dataset.test_mode=view dataset=zjumocap_387_4views_eval
+
 ```

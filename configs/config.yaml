@@ -1,12 +1,14 @@
 defaults:
   - _self_
   - dataset: zjumocap_377_mono
-  - pose_correction: none
-  - texture: sh
-  - rigid: smpl_nn
+  - pose_correction: direct
+  - texture: shallow_mlp
+  - rigid: skinning_field
   - non_rigid: hashgrid
   - option:
       - iter15k
+      
+exp_dir: './exp/2dgs_full_with_small_conv_aiap'
 
 hydra:
   run:
@@ -74,8 +76,8 @@ opt:
   lambda_opacity: 0.
   lambda_skinning: [10,1000,0.1]
   lambda_pose: 0.
-  lambda_aiap_xyz: 0.
-  lambda_aiap_cov: 0.
+  lambda_aiap_xyz: 1.0
+  lambda_aiap_cov: 0.001
 
   #2dgs
   # lambda_normal: 0.00

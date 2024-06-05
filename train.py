@@ -196,6 +196,7 @@ def training(config):
             loss += lbd * value
         loss.backward()
 
+
         iter_end.record()
         torch.cuda.synchronize()
 
@@ -229,7 +230,7 @@ def training(config):
 
             # Log and save
             validation(iteration, testing_iterations, testing_interval, scene, evaluator,(pipe, background))
-            extract_mesh(iteration, testing_iterations, testing_interval, gaussians, scene, dataset, pipe, config.exp_dir)
+            # extract_mesh(iteration, testing_iterations, testing_interval, gaussians, scene, dataset, pipe, config.exp_dir)
             if (iteration in saving_iterations):
                 print("\n[ITER {}] Saving Gaussians".format(iteration))
                 scene.save(iteration)
@@ -388,7 +389,7 @@ def main(config):
         mode="disabled" if config.wandb_disable else None,
         name=wandb_name,
         entity='digital-human-s24',
-        project='gaussian-splatting-avatar-2d-gs-debug-ym-normal-loss',
+        project='gaussian-splatting-avatar-2d-gs-debug-ym-aiap',
         # entity='fast-avatar',
         dir=config.exp_dir,
         config=OmegaConf.to_container(config, resolve=True),

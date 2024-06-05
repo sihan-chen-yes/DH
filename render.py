@@ -181,7 +181,7 @@ def main(config):
     wandb.init(
         mode="disabled" if config.wandb_disable else None,
         name=wandb_name,
-        project='gaussian-splatting-avatar-test',
+        project='gaussian-splatting-avatar-2d-gs-debug-ym-aiap',
         entity='digital-human-s24',
         # entity='fast-avatar',
         dir=config.exp_dir,

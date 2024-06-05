@@ -131,7 +131,7 @@ def render(data,
 
     # get expected depth map
     render_depth_expected = allmap[0:1]
-    render_depth_expected = (render_depth_expected / render_alpha)
+    render_depth_expected = (render_depth_expected / (render_alpha + 1e-4))
     render_depth_expected = torch.nan_to_num(render_depth_expected, 0, 0)
     
     # get depth distortion map
