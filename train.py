@@ -382,14 +382,14 @@ def main(config):
     config.checkpoint_iterations.append(config.opt.iterations)
 
 
-    config.dataset.root_dir = '/cluster/courses/digital_humans/datasets/team_8/ZJUMoCap'
+    config.dataset.root_dir = '../ZJUMoCap'
     # set wandb logger
     wandb_name = config.name
     wandb.init(
         mode="disabled" if config.wandb_disable else None,
         name=wandb_name,
         entity='digital-human-s24',
-        project='gaussian-splatting-avatar-2d-gs-debug-ym-normal-loss',
+        project='3dgs-qzh',
         # entity='fast-avatar',
         dir=config.exp_dir,
         config=OmegaConf.to_container(config, resolve=True),

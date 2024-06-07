@@ -45,6 +45,9 @@ def predict(config):
         render_path = os.path.join(config.exp_dir, config.suffix, 'renders')
         makedirs(render_path, exist_ok=True)
 
+        predict_path = os.path.join(config.exp_dir, config.suffix, 'predicts')
+        makedirs(predict_path, exist_ok=True)
+
         iter_start = torch.cuda.Event(enable_timing=True)
         iter_end = torch.cuda.Event(enable_timing=True)
         times = []
@@ -103,6 +106,7 @@ def predict(config):
             examples.clear()
 
             torchvision.utils.save_image(rendering, os.path.join(render_path, f"render_{view.image_name}.png"))
+            torchvision.utils.save_image(rendering, os.path.join(predict_path, f"predict_{view.image_name}.png"))
 
             # evaluate
             times.append(elapsed)
@@ -236,6 +240,7 @@ def main(config):
     config.exp_dir = config.get('exp_dir') or os.path.join('./exp', config.name)
     os.makedirs(config.exp_dir, exist_ok=True)
     # config.dataset.root_dir = '/cluster/courses/digital_humans/datasets/team_8/ZJUMoCap'
+    config.dataset.root_dir = '../ZJUMoCap'
     # set wandb logger
     if config.mode == 'test':
         config.suffix = config.mode + '-' + config.dataset.test_mode
@@ -263,7 +268,7 @@ def main(config):
     wandb.init(
         mode="disabled" if config.wandb_disable else None,
         name=wandb_name,
-        project='gaussian-splatting-avatar-2d-gs-debug-ym-aiap',
+        project='3dgs-qzh',
         entity='digital-human-s24',
         # entity='fast-avatar',
         dir=config.exp_dir,

@@ -7,10 +7,9 @@ defaults:
   - non_rigid: hashgrid
   - option:
       - iter15k
-  - rotation_representation: quaternion # quaternion or 6d
-  - opt.lambda_nr_lipshitz_bound: 0 # coefficient for Lipschitz MLP
-      
-exp_dir: './exp/2dgs_full_with_small_conv_aiap'
+
+rotation_representation: quaternion # quaternion or 6d
+opt.lambda_nr_lipshitz_bound: 0 # coefficient for Lipschitz MLP
 
 hydra:
   run:
