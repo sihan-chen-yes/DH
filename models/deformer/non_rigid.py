@@ -44,7 +44,7 @@ class MLP(NonRigidDeform):
         else:
             self.rot_dim = 6
 
-        d_out = 3 + 3 + self.rot_dim
+        d_out = 3 + 2 + self.rot_dim
         self.feature_dim = cfg.get('feature_dim', 0)
         d_out += self.feature_dim
 
@@ -219,7 +219,7 @@ class HashGridwithMLP(NonRigidDeform):
             self.rot_dim = 4
         else:
             self.rot_dim = 6
-        d_out = 3 + 3 + self.rot_dim
+        d_out = 3 + 2 + self.rot_dim
 
         self.feature_dim = cfg.get('feature_dim', 0)
         d_out += self.feature_dim
