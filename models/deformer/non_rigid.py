@@ -38,7 +38,13 @@ class MLP(NonRigidDeform):
             self.latent = nn.Embedding(len(self.frame_dict), self.latent_dim)
 
         d_in = 3
-        d_out = 3 + 3 + 4
+        self.rotation_representation = cfg.get('rotation_representation', 'quaternion')
+        if self.rotation_representation == 'quaternion':
+            self.rot_dim = 4
+        else:
+            self.rot_dim = 6
+
+        d_out = 3 + 3 + self.rot_dim
         self.feature_dim = cfg.get('feature_dim', 0)
         d_out += self.feature_dim
 
@@ -78,8 +84,8 @@ class MLP(NonRigidDeform):
         deltas = self.mlp(xyz_norm, cond=pose_feat)
 
         delta_xyz = deltas[:, :3]
-        delta_scale = deltas[:, 3:6]
-        delta_rot = deltas[:, 6:10]
+        delta_scale = deltas[:, 3:5]
+        delta_rot = deltas[:, 5: 5+self.rot_dim]
 
         deformed_gaussians._xyz = gaussians._xyz + delta_xyz
 
@@ -98,12 +104,17 @@ class MLP(NonRigidDeform):
         if rot_offset == 'add':
             deformed_gaussians._rotation = gaussians._rotation + delta_rot
         elif rot_offset == 'mult':
-            q1 = delta_rot
-            q1[0] = 1. # [1,0,0,0] represents identity rotation
-            delta_rot = delta_rot[1:]
-            q2 = gaussians._rotation
-            # deformed_gaussians._rotation = quaternion_multiply(q1, q2)
-            deformed_gaussians._rotation = tf.quaternion_multiply(q1, q2)
+            if self.rotation_representation == 'quaternion':
+                q1 = delta_rot
+                q1[0] = 1. # [1,0,0,0] represents identity rotation
+                delta_rot = delta_rot[1:]
+                q2 = gaussians._rotation
+                # deformed_gaussians._rotation = quaternion_multiply(q1, q2)
+                deformed_gaussians._rotation = tf.quaternion_multiply(q1, q2)
+            elif self.rotation_representation == '6d':
+                delta_R = rotation_6d_to_matrix(delta_rot)
+                R = rotation_6d_to_matrix(gaussians._rotation)
+                deformed_gaussians._rotation = matrix_to_rotation_6d(torch.bmm(delta_R, R))
         else:
             raise ValueError
 
@@ -203,7 +214,13 @@ class HashGridwithMLP(NonRigidDeform):
             self.frame_dict = metadata['frame_dict']
             self.latent = nn.Embedding(len(self.frame_dict), self.latent_dim)
 
-        d_out = 3 + 2 + 4
+        self.rotation_representation = cfg.get('rotation_representation', 'quaternion')
+        if self.rotation_representation == 'quaternion':
+            self.rot_dim = 4
+        else:
+            self.rot_dim = 6
+        d_out = 3 + 3 + self.rot_dim
+
         self.feature_dim = cfg.get('feature_dim', 0)
         d_out += self.feature_dim
 
@@ -246,7 +263,7 @@ class HashGridwithMLP(NonRigidDeform):
 
         delta_xyz = deltas[:, :3]
         delta_scale = deltas[:, 3:5]
-        delta_rot = deltas[:, 5:9]
+        delta_rot = deltas[:, 5: 5+self.rot_dim]
 
         deformed_gaussians._xyz = gaussians._xyz + delta_xyz
 
@@ -265,12 +282,17 @@ class HashGridwithMLP(NonRigidDeform):
         if rot_offset == 'add':
             deformed_gaussians._rotation = gaussians._rotation + delta_rot
         elif rot_offset == 'mult':
-            q1 = delta_rot
-            q1[0] = 1.  # [1,0,0,0] represents identity rotation
-            delta_rot = delta_rot[1:]
-            q2 = gaussians._rotation
-            # deformed_gaussians._rotation = quaternion_multiply(q1, q2)
-            deformed_gaussians._rotation = tf.quaternion_multiply(q1, q2)
+            if self.rotation_representation == 'quaternion':
+                q1 = delta_rot
+                q1[0] = 1.  # [1,0,0,0] represents identity rotation
+                delta_rot = delta_rot[1:]
+                q2 = gaussians._rotation
+                # deformed_gaussians._rotation = quaternion_multiply(q1, q2)
+                deformed_gaussians._rotation = tf.quaternion_multiply(q1, q2)
+            elif self.rotation_representation == '6d':
+                delta_R = rotation_6d_to_matrix(delta_rot)
+                R = rotation_6d_to_matrix(gaussians._rotation)
+                deformed_gaussians._rotation = matrix_to_rotation_6d(torch.bmm(delta_R, R))
         else:
             raise ValueError
 
