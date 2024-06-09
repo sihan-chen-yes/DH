@@ -119,6 +119,11 @@ def test(config):
 
             torchvision.utils.save_image(rendering, os.path.join(render_path, f"render_{view.image_name}.png"))
 
+            ply_path = os.path.join(render_path, f"render_{view.image_name}.ply")
+            # save gaussians center
+            deformed_gaussian = render_pkg["deformed_gaussian"]
+            deformed_gaussian.save_ply(ply_path)
+
             # evaluate
             if config.evaluate:
                 metrics = evaluator(rendering, gt)

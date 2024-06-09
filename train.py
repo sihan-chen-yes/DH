@@ -306,7 +306,7 @@ def main(config):
     config.checkpoint_iterations.append(config.opt.iterations)
 
 
-    config.dataset.root_dir = '/cluster/courses/digital_humans/datasets/team_8/ZJUMoCap'
+    config.dataset.root_dir = '../ZJUMoCap'
     # set wandb logger
     wandb_name = config.name
     wandb.init(

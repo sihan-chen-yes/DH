@@ -38,3 +38,6 @@ Then run:
 ```Python
 python render.py mode=test dataset.test_mode=view dataset=zjumocap_386_mono_eval_novel
 ```
+
+After finishing running test, the point cloud file(ply) will be generated, using MeshLab to estimate 
+the point set normal, then do reconstruction to get mesh
