@@ -21,6 +21,8 @@ from utils.general_utils import fix_random
 from scene import GaussianModel
 
 from utils.general_utils import Evaluator, PSEvaluator
+from utils.mesh_utils import GaussianExtractor, to_cam_open3d, post_process_mesh
+import open3d as o3d
 
 import hydra
 from omegaconf import OmegaConf
@@ -150,6 +152,59 @@ def test(config):
                  lpips=_lpips.cpu().numpy(),
                  time=_time)
 
+def extract_mesh(config):
+    model = config.model
+    dataset_config = config.dataset
+    opt = config.opt
+    pipe = config.pipeline
+    testing_iterations = config.test_iterations
+    testing_interval = config.test_interval
+    saving_iterations = config.save_iterations
+    checkpoint_iterations = config.checkpoint_iterations
+    checkpoint = config.start_checkpoint
+    debug_from = config.debug_from
+
+    reconstruct_dir = os.path.join(config.exp_dir, config.suffix)
+
+    gaussians = GaussianModel(config.model.gaussian)
+    scene = Scene(config, gaussians, config.exp_dir)
+    scene.eval()
+    load_ckpt = config.get('load_ckpt', None)
+    if load_ckpt is None:
+        load_ckpt = os.path.join(scene.save_dir, "ckpt" + str(config.opt.iterations) + ".pth")
+    scene.load_checkpoint(load_ckpt)
+
+    bg_color = [1, 1, 1] if config.dataset.white_background else [0, 0, 0]
+    background = torch.tensor(bg_color, dtype=torch.float32, device="cuda")
+
+    iter_start = torch.cuda.Event(enable_timing=True)
+    iter_end = torch.cuda.Event(enable_timing=True)
+
+    evaluator = PSEvaluator() if config.dataset.name == 'people_snapshot' else Evaluator()
+
+    bg_color = [1,1,1] if dataset_config.white_background else [0, 0, 0]
+    gaussExtractor = GaussianExtractor(gaussians, scene, render, pipe, bg_color=bg_color)
+
+    print("export mesh ...")
+    os.makedirs(reconstruct_dir, exist_ok=True)
+    # set the active_sh to 0 to export only diffuse texture
+    gaussExtractor.gaussians.active_sh_degree = 0
+    gaussExtractor.reconstruction(scene.test_dataset, 0)
+    # extract the mesh and save
+
+    name = 'fuse.ply'
+    depth_trunc = (gaussExtractor.radius * 2.0) if pipe.depth_trunc < 0 else pipe.depth_trunc
+    voxel_size = (depth_trunc / pipe.mesh_res) if pipe.voxel_size < 0 else pipe.voxel_size
+    sdf_trunc = 5.0 * voxel_size if pipe.sdf_trunc < 0 else pipe.sdf_trunc
+    mesh = gaussExtractor.extract_mesh_bounded(voxel_size=voxel_size, sdf_trunc=sdf_trunc, depth_trunc=depth_trunc)
+
+    o3d.io.write_triangle_mesh(os.path.join(reconstruct_dir, name), mesh)
+    print("mesh saved at {}".format(os.path.join(reconstruct_dir, name)))
+    # post-process the mesh and save, saving the largest N clusters
+    mesh_post = post_process_mesh(mesh, cluster_to_keep=pipe.num_cluster)
+    o3d.io.write_triangle_mesh(os.path.join(reconstruct_dir, name.replace('.ply', '_post.ply')), mesh_post)
+    print("mesh post processed saved at {}".format(os.path.join(reconstruct_dir, name.replace('.ply', '_post.ply'))))
+
 
 @hydra.main(version_base=None, config_path="configs", config_name="config")
 def main(config):
@@ -178,6 +233,8 @@ def main(config):
             }
         predict_mode = predict_dict[predict_seq]
         config.suffix = config.mode + '-' + predict_mode
+    elif config.mode == 'reconstruct':
+        config.suffix = config.mode
     else:
         raise ValueError
     if config.dataset.freeview:
@@ -199,6 +256,8 @@ def main(config):
         test(config)
     elif config.mode == 'predict':
         predict(config)
+    elif config.mode == 'reconstruct':
+        extract_mesh(config)
     else:
         raise ValueError
 

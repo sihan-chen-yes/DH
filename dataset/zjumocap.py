@@ -31,6 +31,8 @@ class ZJUMoCapDataset(Dataset):
         self.train_cams = cfg.train_views
         self.val_frames = cfg.val_frames
         self.val_cams = cfg.val_views
+        self.reconstruct_frames = cfg.reconstruct_frames
+        self.reconstruct_views = cfg.reconstruct_views
         self.white_bg = cfg.white_background
         self.H, self.W = 1024, 1024 # hardcoded original size
         self.h, self.w = cfg.img_hw
@@ -52,6 +54,9 @@ class ZJUMoCapDataset(Dataset):
         elif split == 'predict':
             cam_names = self.cfg.predict_views
             frames = self.cfg.predict_frames
+        elif split == 'reconstruct':
+            cam_names = self.reconstruct_views
+            frames = self.reconstruct_frames
         else:
             raise ValueError
 
