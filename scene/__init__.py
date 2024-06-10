@@ -37,6 +37,8 @@ class Scene:
             self.test_dataset = load_dataset(cfg.dataset, split='test')
         elif cfg.mode == 'predict':
             self.test_dataset = load_dataset(cfg.dataset, split='predict')
+        elif cfg.mode == 'reconstruct':
+            self.test_dataset = load_dataset(cfg.dataset, split='reconstruct')
         else:
             raise ValueError
 

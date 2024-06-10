@@ -99,3 +99,15 @@ python render.py mode=test dataset.test_mode=view dataset=zjumocap_386_mono_eval
 python render.py mode=test dataset.test_mode=view dataset=zjumocap_387_4views_eval
 
 ```
+
+reconstruction:
+first change the dataset config:
+```yaml
+  reconstruct_views: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '21', '22', '23']
+  # means the first frame!
+  reconstruct_frames: [300, 301, 1]
+```
+
+```python
+python render.py mode=reconstruct dataset.test_mode=view dataset=zjumocap_393_mono_eval_novel
+```

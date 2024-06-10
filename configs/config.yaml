@@ -117,7 +117,8 @@ checkpoint_iterations: []
 start_checkpoint: null
 wandb_disable: false
 
-mode: train
+#reconstruct for recontruct a specific frame
+mode: reconstruct
 load_ckpt: null
 evaluate: true
 clean: true
