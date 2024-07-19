@@ -87,9 +87,16 @@ opt:
   opacity_threshold: 0.05
 
 pipeline:
+  # TODO?
   convert_SHs_python: true
   compute_cov3D_python: true
   debug: false
+  depth_ratio: 1.0 # todo: adjust
+  num_cluster: 1
+  voxel_size: 0.004
+  sdf_trunc: 0.016
+  depth_trunc: 3.0
+  mesh_res: 1024
 
   pose_noise: 0.1
 

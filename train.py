@@ -21,6 +21,7 @@ from scene import Scene, GaussianModel
 from utils.general_utils import fix_random, Evaluator, PSEvaluator
 from tqdm import tqdm
 from utils.loss_utils import full_aiap_loss
+from utils.general_utils import colormap
 
 import hydra
 from omegaconf import OmegaConf
@@ -260,6 +261,10 @@ def validation(iteration, testing_iterations, testing_interval, scene : Scene, e
                 gt_image = torch.clamp(data.original_image.to("cuda"), 0.0, 1.0)
                 opacity_image = torch.clamp(render_pkg["opacity_render"], 0.0, 1.0)
 
+                surf_depth_image = render_pkg["surf_depth"]
+                norm = surf_depth_image.max()
+                surf_depth_image = surf_depth_image / norm
+                surf_depth_image = colormap(surf_depth_image.cpu().numpy()[0], cmap='turbo')
 
                 wandb_img = wandb.Image(opacity_image[None],
                                         caption=config['name'] + "_view_{}/render_opacity".format(data.image_name))
@@ -268,6 +273,9 @@ def validation(iteration, testing_iterations, testing_interval, scene : Scene, e
                 examples.append(wandb_img)
                 wandb_img = wandb.Image(gt_image[None], caption=config['name'] + "_view_{}/ground_truth".format(
                     data.image_name))
+                examples.append(wandb_img)
+
+                wandb_img = wandb.Image(surf_depth_image[None], caption=config['name'] + "_view_{}/surf_depth_image".format(data.image_name))
                 examples.append(wandb_img)
 
                 l1_test += l1_loss(image, gt_image).mean().double()
@@ -313,7 +321,7 @@ def main(config):
         mode="disabled" if config.wandb_disable else None,
         name=wandb_name,
         entity='digital-human-s24',
-        project='3dgs-baseline-fair',
+        project='3dgs-csh_train_pose_novel_view_baseline',
         # entity='fast-avatar',
         dir=config.exp_dir,
         config=OmegaConf.to_container(config, resolve=True),

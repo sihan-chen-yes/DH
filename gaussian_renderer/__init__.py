@@ -21,7 +21,8 @@ def render(data,
            scaling_modifier = 1.0,
            override_color = None,
            compute_loss=True,
-           return_opacity=False, ):
+           return_opacity=True,
+           return_depth=True):
     """
     Render the scene. 
     
@@ -100,6 +101,26 @@ def render(data,
             cov3D_precomp=cov3D_precomp)
         opacity_image = opacity_image[:1]
 
+    #expected depth map
+    depth_image = None
+    if return_depth:
+        R = torch.from_numpy(data.R).to(device=opacity.device).type_as(means3D)
+        T = torch.from_numpy(data.T).to(device=opacity.device).type_as(means3D)
+        # points in camera coordinate frame
+        points_cam = means3D @ R.T + T[None, :]
+        depths = points_cam[:, 2]
+        depth_image, _ = rasterizer(
+            means3D=means3D,
+            means2D=means2D,
+            shs=None,
+            colors_precomp=depths,
+            opacities=opacity,
+            scales=scales,
+            rotations=rotations,
+            cov3D_precomp=cov3D_precomp)
+
+        # depth_image = (depth_image / (opacity_image + 1e-4))
+        depth_image = torch.nan_to_num(depth_image, 0, 0)
 
     # Those Gaussians that were frustum culled or had a radius of 0 were not visible.
     # They will be excluded from value updates used in the splitting criteria.
@@ -110,4 +131,7 @@ def render(data,
             "radii": radii,
             "loss_reg": loss_reg,
             "opacity_render": opacity_image,
+
+            'rend_alpha': opacity_image,
+            "surf_depth": depth_image
             }
