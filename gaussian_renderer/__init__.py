@@ -107,8 +107,8 @@ def render(data,
         R = torch.from_numpy(data.R).to(device=opacity.device).type_as(means3D)
         T = torch.from_numpy(data.T).to(device=opacity.device).type_as(means3D)
         # points in camera coordinate frame
-        points_cam = means3D @ R.T + T[None, :]
-        depths = points_cam[:, 2]
+        points_cam = means3D @ R + T[None, :]
+        depths = points_cam[:, 2][:, None].expand(-1, 3)
         depth_image, _ = rasterizer(
             means3D=means3D,
             means2D=means2D,
@@ -118,8 +118,7 @@ def render(data,
             scales=scales,
             rotations=rotations,
             cov3D_precomp=cov3D_precomp)
-
-        # depth_image = (depth_image / (opacity_image + 1e-4))
+        depth_image = (depth_image / (opacity_image + 1e-4))
         depth_image = torch.nan_to_num(depth_image, 0, 0)
 
     # Those Gaussians that were frustum culled or had a radius of 0 were not visible.
