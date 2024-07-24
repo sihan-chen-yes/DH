@@ -12,10 +12,14 @@ model:
     feature_dim: ${model.gaussian.feature_dim}
     use_xyz: false
     use_cov: false
-    use_normal: false
+    #TODO
+    use_normal: true
     sh_degree: 3
     non_rigid_dim: 16
     latent_dim: 16
+
+    #TODO
+    use_reflection: true
 
     cano_view_dir: true
     view_noise: 45

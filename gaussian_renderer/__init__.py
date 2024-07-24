@@ -15,6 +15,7 @@ import math
 from diff_surfel_rasterization import GaussianRasterizationSettings, GaussianRasterizer
 from utils.sh_utils import eval_sh
 from utils.point_utils import depth_to_normal
+from utils.general_utils import build_rotation
 
 
 def render(data,
@@ -25,7 +26,8 @@ def render(data,
            scaling_modifier = 1.0,
            override_color = None,
            compute_loss=True,
-           return_opacity=False, ):
+           return_opacity=False,
+           return_normal_constraint=False):
     """
     Render the scene. 
     
@@ -163,6 +165,33 @@ def render(data,
     #         cov3D_precomp=cov3D_precomp)
         # opacity_image = opacity_image[:1]
 
+    # rendered normal constraint
+    rendered_normal_constraint = None
+    if return_normal_constraint:
+        scale = pc._scaling
+        rot = build_rotation(pc._rotation)
+        normal = torch.gather(rot, dim=2, index=scale.argmin(1).reshape(-1, 1, 1).expand(-1, 3, 1)).squeeze(-1)
+        n_points = normal.shape[0]
+
+        dir_pp = (pc.get_xyz - data.camera_center.repeat(n_points, 1))
+        T_fwd = pc.fwd_transform
+        R_bwd = T_fwd[:, :3, :3].transpose(1, 2)
+        dir_pp = torch.matmul(R_bwd, dir_pp.unsqueeze(-1)).squeeze(-1)
+        dir_pp_normalized = dir_pp / (dir_pp.norm(dim=1, keepdim=True) + 1e-12)
+        dot = torch.bmm(dir_pp_normalized.unsqueeze(2).transpose(1, 2), normal.unsqueeze(2)).squeeze(2)
+        normal_constraint = (torch.clamp(dot, min=0.0) ** 2).expand(-1, 3)
+        rendered_normal_constraint, _, _ = rasterizer(
+            means3D=means3D,
+            means2D=means2D,
+            shs=shs,
+            colors_precomp=normal_constraint,
+            opacities=opacity,
+            scales=scales,
+            rotations=rotations,
+            cov3D_precomp=cov3D_precomp
+        )
+
+
 
     # Those Gaussians that were frustum culled or had a radius of 0 were not visible.
     # They will be excluded from value updates used in the splitting criteria.
@@ -179,4 +208,5 @@ def render(data,
             'rend_dist': render_dist,
             'surf_depth': surf_depth,
             'surf_normal': surf_normal,
+            'rendered_normal_constraint': rendered_normal_constraint
             }

@@ -107,7 +107,7 @@ def training(config):
 
         lambda_mask = C(iteration, config.opt.lambda_mask)
         use_mask = lambda_mask > 0.
-        render_pkg = render(data, iteration, scene, pipe, background, compute_loss=True, return_opacity=use_mask)
+        render_pkg = render(data, iteration, scene, pipe, background, compute_loss=True, return_opacity=use_mask, return_normal_constraint=True)
 
         image, viewspace_point_tensor, visibility_filter, radii = render_pkg["render"], render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"]
         opacity = render_pkg["opacity_render"] if use_mask else None
@@ -174,19 +174,27 @@ def training(config):
 
         # 2dgs regularization
         #TODO iteration adjust iteration!
-        lambda_normal = config.opt.lambda_normal if iteration > 7000 else 0.0
-        lambda_dist = config.opt.lambda_dist if iteration > 3000 else 0.0
+        # lambda_normal = config.opt.lambda_normal if iteration > 7000 else 0.0
+        # lambda_dist = config.opt.lambda_dist if iteration > 3000 else 0.0
+        #
+        # rend_dist = render_pkg["rend_dist"]
+        # rend_normal = render_pkg['rend_normal']
+        # surf_normal = render_pkg['surf_normal']
+        # normal_error = (1 - (rend_normal * surf_normal).sum(dim=0))[None]
+        #
+        # loss_normal = normal_error.mean()
+        # loss_dist = rend_dist.mean()
+        #
+        # loss += lambda_normal * loss_normal
+        # loss += lambda_dist * loss_dist
 
-        rend_dist = render_pkg["rend_dist"]
-        rend_normal = render_pkg['rend_normal']
-        surf_normal = render_pkg['surf_normal']
-        normal_error = (1 - (rend_normal * surf_normal).sum(dim=0))[None]
+        # TODO
+        # ref-nerf
+        lambda_normal_constraint = config.opt.lambda_normal_constraint
+        rend_normal_constraint = render_pkg['rendered_normal_constraint']
+        loss_normal_constraint = rend_normal_constraint[0, :, :].mean()
+        loss += lambda_normal_constraint * loss_normal_constraint
 
-        loss_normal = normal_error.mean()
-        loss_dist = rend_dist.mean()
-
-        loss += lambda_normal * loss_normal
-        loss += lambda_dist * loss_dist
 
         # regularization
         loss_reg = render_pkg["loss_reg"]
@@ -210,8 +218,9 @@ def training(config):
                 'loss/loss_skinning': loss_skinning.item(),
                 'loss/xyz_aiap_loss': loss_aiap_xyz.item(),
                 'loss/cov_aiap_loss': loss_aiap_cov.item(),
-                'loss/normal_loss': loss_normal.item(),
-                'loss/dist_loss': loss_dist.item(),
+                # 'loss/normal_loss': loss_normal.item(),
+                # 'loss/dist_loss': loss_dist.item(),
+                'loss/normal_constraint': loss_normal_constraint.item(),
                 'loss/total_loss': loss.item(),
                 'iter_time': elapsed,
             }
@@ -389,7 +398,7 @@ def main(config):
         mode="disabled" if config.wandb_disable else None,
         name=wandb_name,
         entity='digital-human-s24',
-        project='2dgs-aiap-ablation',
+        project='2dgs-csh-ref-nerf',
         # entity='fast-avatar',
         dir=config.exp_dir,
         config=OmegaConf.to_container(config, resolve=True),
