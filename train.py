@@ -27,6 +27,8 @@ import hydra
 from omegaconf import OmegaConf
 import wandb
 import lpips
+from utils.depth_utils import depths_to_points, depth_to_normal
+
 
 
 def C(iteration, value):
@@ -83,6 +85,9 @@ def training(config):
     ema_loss_for_log = 0.0
     progress_bar = tqdm(range(first_iter, opt.iterations), desc="Training progress")
     first_iter += 1
+
+    gaussians.compute_3D_filter(cameras=scene.train_dataset)
+
     for iteration in range(first_iter, opt.iterations + 1):
 
         iter_start.record()
@@ -105,13 +110,21 @@ def training(config):
 
         lambda_mask = C(iteration, config.opt.lambda_mask)
         use_mask = lambda_mask > 0.
-        render_pkg = render(data, iteration, scene, pipe, background, compute_loss=True, return_opacity=use_mask)
 
-        image, viewspace_point_tensor, visibility_filter, radii = render_pkg["render"], render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"]
-        opacity = render_pkg["opacity_render"] if use_mask else None
+        render_pkg = render(data, iteration, scene, pipe, background, compute_loss=True, return_opacity=use_mask)
+        rendering, viewspace_point_tensor, visibility_filter, radii = render_pkg["render"], render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"]
+
+        image = rendering[:3, :, :]
+
+        #TODO
+        opacity = rendering[7, :, :][None, :] if use_mask else None
 
         # Loss
         gt_image = data.original_image.cuda()
+        #TODO
+        # if dataset.use_decoupled_appearance:
+        #     Ll1 = L1_loss_appearance(image, gt_image, gaussians, viewpoint_cam.idx)
+        # rgb_loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim(image, gt_image))
 
         lambda_l1 = C(iteration, config.opt.lambda_l1)
         lambda_dssim = C(iteration, config.opt.lambda_dssim)
@@ -170,7 +183,33 @@ def training(config):
         loss += lambda_aiap_xyz * loss_aiap_xyz
         loss += lambda_aiap_cov * loss_aiap_cov
 
-        # regularization
+        # depth distortion regularization
+        distortion_map = rendering[8, :, :]
+        # edge aware regularization is not really helpful so we disable it
+        # distortion_map = get_edge_aware_distortion_map(gt_image, distortion_map)
+        distortion_loss = distortion_map.mean()
+
+        # depth normal consistency
+        depth = rendering[6, :, :]
+        depth_normal, _ = depth_to_normal(data, depth[None, ...])
+        depth_normal = depth_normal.permute(2, 0, 1)
+
+        render_normal = rendering[3:6, :, :]
+        render_normal = torch.nn.functional.normalize(render_normal, p=2, dim=0)
+
+        c2w = (data.world_view_transform.T).inverse()
+        normal2 = c2w[:3, :3] @ render_normal.reshape(3, -1)
+        render_normal_world = normal2.reshape(3, *render_normal.shape[1:])
+
+        normal_error = 1 - (render_normal_world * depth_normal).sum(dim=0)
+        depth_normal_loss = normal_error.mean()
+
+        lambda_distortion = opt.lambda_distortion if iteration >= opt.distortion_from_iter else 0.0
+        lambda_depth_normal = opt.lambda_depth_normal if iteration >= opt.depth_normal_from_iter else 0.0
+
+        loss += depth_normal_loss * lambda_depth_normal + distortion_loss * lambda_distortion
+
+        # other regularization
         loss_reg = render_pkg["loss_reg"]
         for name, value in loss_reg.items():
             lbd = opt.get(f"lambda_{name}", 0.)
@@ -221,10 +260,17 @@ def training(config):
 
                 if iteration > opt.densify_from_iter and iteration % opt.densification_interval == 0:
                     size_threshold = 20 if iteration > opt.opacity_reset_interval else None
-                    gaussians.densify_and_prune(opt, scene, size_threshold)
+                    gaussians.densify_and_prune(opt.densify_grad_threshold, 0.05, scene.cameras_extent, size_threshold)
+                    gaussians.compute_3D_filter(cameras=scene.train_dataset)
+
                 
                 if iteration % opt.opacity_reset_interval == 0 or (dataset.white_background and iteration == opt.densify_from_iter):
                     gaussians.reset_opacity()
+
+            if iteration % 100 == 0 and iteration > opt.densify_until_iter:
+                if iteration < opt.iterations - 100:
+                    # don't update in the end of training
+                    gaussians.compute_3D_filter(cameras=scene.train_dataset)
 
             # Optimizer step
             if iteration < opt.iterations:
@@ -257,14 +303,24 @@ def validation(iteration, testing_iterations, testing_interval, scene : Scene, e
             for idx, data_idx in enumerate(config['cameras']):
                 data = getattr(scene, config['name'] + '_dataset')[data_idx]
                 render_pkg = render(data, iteration, scene, *renderArgs, compute_loss=False, return_opacity=True)
-                image = torch.clamp(render_pkg["render"], 0.0, 1.0)
-                gt_image = torch.clamp(data.original_image.to("cuda"), 0.0, 1.0)
-                opacity_image = torch.clamp(render_pkg["opacity_render"], 0.0, 1.0)
+                rendering = render_pkg["render"]
+                image = rendering[:3, :, :]
+                rend_normal = rendering[3:6, :, :]
+                depth_image = rendering[6, :, :]
+                opacity = rendering[7, :, :]
+                distortion = rendering[8, :, :]
 
-                surf_depth_image = render_pkg["surf_depth"]
-                norm = surf_depth_image.max()
-                surf_depth_image = surf_depth_image / norm
-                surf_depth_image = colormap(surf_depth_image.cpu().numpy()[0], cmap='turbo')
+                image = torch.clamp(image, 0.0, 1.0)
+                gt_image = torch.clamp(data.original_image.to("cuda"), 0.0, 1.0)
+                opacity_image = torch.clamp(opacity, 0.0, 1.0)
+
+                rend_normal_image = rend_normal * 0.5 + 0.5
+
+                rend_dist_image = colormap(distortion.cpu().numpy())
+
+                norm = depth_image.max()
+                depth_image = depth_image / norm
+                depth_image = colormap(depth_image.cpu().numpy(), cmap='turbo')
 
                 wandb_img = wandb.Image(opacity_image[None],
                                         caption=config['name'] + "_view_{}/render_opacity".format(data.image_name))
@@ -275,8 +331,19 @@ def validation(iteration, testing_iterations, testing_interval, scene : Scene, e
                     data.image_name))
                 examples.append(wandb_img)
 
-                wandb_img = wandb.Image(surf_depth_image[None], caption=config['name'] + "_view_{}/surf_depth_image".format(data.image_name))
+                # gof
+                wandb_img = wandb.Image(rend_normal_image[None],
+                                        caption=config['name'] + "_view_{}/rend_normal_image".format(data.image_name))
                 examples.append(wandb_img)
+
+                wandb_img = wandb.Image(rend_dist_image[None],
+                                        caption=config['name'] + "_view_{}/rend_dist_image".format(data.image_name))
+                examples.append(wandb_img)
+
+                wandb_img = wandb.Image(depth_image[None],
+                                        caption=config['name'] + "_view_{}/depth_image".format(data.image_name))
+                examples.append(wandb_img)
+
 
                 l1_test += l1_loss(image, gt_image).mean().double()
                 metrics_test = evaluator(image, gt_image)
@@ -321,7 +388,7 @@ def main(config):
         mode="disabled" if config.wandb_disable else None,
         name=wandb_name,
         entity='digital-human-s24',
-        project='3dgs-csh_train_pose_novel_view_baseline',
+        project='gof-avatar',
         # entity='fast-avatar',
         dir=config.exp_dir,
         config=OmegaConf.to_container(config, resolve=True),

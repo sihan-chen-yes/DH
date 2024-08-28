@@ -398,6 +398,8 @@ class ZJUMoCapDataset(Dataset):
             rots=torch.from_numpy(pose_rot).float().unsqueeze(0),
             Jtrs=torch.from_numpy(Jtr_norm).float().unsqueeze(0),
             bone_transforms=torch.from_numpy(bone_transforms),
+            focal_x=focal_length_x,
+            focal_y=focal_length_y
         )
 
     def __getitem__(self, idx):

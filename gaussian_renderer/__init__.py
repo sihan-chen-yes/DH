@@ -22,10 +22,19 @@ def render(data,
            override_color = None,
            compute_loss=True,
            return_opacity=True,
-           return_depth=True):
+           return_depth=True,
+           kernel_size=0.0,
+           subpixel_offset=None
+           ):
     """
     Render the scene. 
-    
+    rendered_image:
+    [0:3, :, :] image
+    [3:6, :, :] rend_normal_image
+    [6, :, :] depth_image
+    [7, :, :] opacity_image
+    [8, :, :] distortion_map
+
     Background tensor (bg_color) must be on GPU!
     """
     pc, loss_reg, colors_precomp = scene.convert_gaussians(data, iteration, compute_loss)
@@ -41,11 +50,16 @@ def render(data,
     tanfovx = math.tan(data.FoVx * 0.5)
     tanfovy = math.tan(data.FoVy * 0.5)
 
+    if subpixel_offset is None:
+        subpixel_offset = torch.zeros((int(data.image_height), int(data.image_width), 2), dtype=torch.float32, device="cuda")
+
     raster_settings = GaussianRasterizationSettings(
         image_height=int(data.image_height),
         image_width=int(data.image_width),
         tanfovx=tanfovx,
         tanfovy=tanfovy,
+        kernel_size=kernel_size,
+        subpixel_offset=subpixel_offset,
         bg=bg_color,
         scale_modifier=scaling_modifier,
         viewmatrix=data.world_view_transform,
@@ -60,18 +74,25 @@ def render(data,
 
     means3D = pc.get_xyz
     means2D = screenspace_points
-    opacity = pc.get_opacity
+    opacity = pc.get_opacity_with_3D_filter
 
     # If precomputed 3d covariance is provided, use it. If not, then it will be computed from
     # scaling / rotation by the rasterizer.
     scales = None
     rotations = None
     cov3D_precomp = None
+    #TODO bug here in gof
     if pipe.compute_cov3D_python:
         cov3D_precomp = pc.get_covariance(scaling_modifier)
     else:
-        scales = pc.get_scaling
+        #TODO 3d filter
+        scales = pc.get_scaling_with_3D_filter
         rotations = pc.get_rotation
+
+    view2gaussian_precomp = None
+    # pipe.compute_view2gaussian_python = True
+    # if pipe.compute_view2gaussian_python:
+    #     view2gaussian_precomp = pc.get_view2gaussian(raster_settings.viewmatrix)
 
     # If precomputed colors are provided, use them. Otherwise, if it is desired to precompute colors
     # from SHs in Python, do it. If not, then SH -> RGB conversion will be done by rasterizer.
@@ -86,40 +107,43 @@ def render(data,
         opacities = opacity,
         scales = scales,
         rotations = rotations,
-        cov3D_precomp = cov3D_precomp)
+        cov3D_precomp = cov3D_precomp,
+        view2gaussian_precomp=view2gaussian_precomp)
 
     opacity_image = None
-    if return_opacity:
-        opacity_image, _ = rasterizer(
-            means3D=means3D,
-            means2D=means2D,
-            shs=None,
-            colors_precomp=torch.ones(opacity.shape[0], 3, device=opacity.device),
-            opacities=opacity,
-            scales=scales,
-            rotations=rotations,
-            cov3D_precomp=cov3D_precomp)
-        opacity_image = opacity_image[:1]
+    # if return_opacity:
+    #     opacity_image, _ = rasterizer(
+    #         means3D=means3D,
+    #         means2D=means2D,
+    #         shs=None,
+    #         colors_precomp=torch.ones(opacity.shape[0], 3, device=opacity.device),
+    #         opacities=opacity,
+    #         scales=scales,
+    #         rotations=rotations,
+    #         cov3D_precomp=cov3D_precomp,
+    #         view2gaussian_precomp=view2gaussian_precomp)
+    #     opacity_image = opacity_image[:1]
 
     #expected depth map
     depth_image = None
-    if return_depth:
-        R = torch.from_numpy(data.R).to(device=opacity.device).type_as(means3D)
-        T = torch.from_numpy(data.T).to(device=opacity.device).type_as(means3D)
-        # points in camera coordinate frame
-        points_cam = means3D @ R + T[None, :]
-        depths = points_cam[:, 2][:, None].expand(-1, 3)
-        depth_image, _ = rasterizer(
-            means3D=means3D,
-            means2D=means2D,
-            shs=None,
-            colors_precomp=depths,
-            opacities=opacity,
-            scales=scales,
-            rotations=rotations,
-            cov3D_precomp=cov3D_precomp)
-        depth_image = (depth_image / (opacity_image + 1e-4))
-        depth_image = torch.nan_to_num(depth_image, 0, 0)
+    # if return_depth:
+    #     R = torch.from_numpy(data.R).to(device=opacity.device).type_as(means3D)
+    #     T = torch.from_numpy(data.T).to(device=opacity.device).type_as(means3D)
+    #     # points in camera coordinate frame
+    #     points_cam = means3D @ R + T[None, :]
+    #     depths = points_cam[:, 2][:, None].expand(-1, 3)
+    #     depth_image, _ = rasterizer(
+    #         means3D=means3D,
+    #         means2D=means2D,
+    #         shs=None,
+    #         colors_precomp=depths,
+    #         opacities=opacity,
+    #         scales=scales,
+    #         rotations=rotations,
+    #         cov3D_precomp=cov3D_precomp,
+    #         view2gaussian_precomp=view2gaussian_precomp)
+    #     depth_image = (depth_image / (opacity_image + 1e-4))
+    #     depth_image = torch.nan_to_num(depth_image, 0, 0)
 
     # Those Gaussians that were frustum culled or had a radius of 0 were not visible.
     # They will be excluded from value updates used in the splitting criteria.
@@ -131,6 +155,6 @@ def render(data,
             "loss_reg": loss_reg,
             "opacity_render": opacity_image,
 
-            'rend_alpha': opacity_image,
             "surf_depth": depth_image
             }
+

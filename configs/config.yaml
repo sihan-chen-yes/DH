@@ -76,6 +76,10 @@ opt:
   lambda_pose: 0.
   lambda_aiap_xyz: 1.0
   lambda_aiap_cov: 0.001
+  lambda_distortion: 100
+  lambda_depth_normal: 0.05
+  distortion_from_iter: 15000
+  depth_normal_from_iter: 15000
 
   # densification configs
   percent_dense: 0.01
@@ -89,7 +93,9 @@ opt:
 pipeline:
   # TODO?
   convert_SHs_python: true
-  compute_cov3D_python: true
+  compute_cov3D_python: false
+  compute_view2gaussian_python: false
+
   debug: false
   depth_ratio: 1.0 # todo: adjust
   num_cluster: 1
