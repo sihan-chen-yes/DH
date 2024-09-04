@@ -15,6 +15,7 @@ hydra:
     chdir: false
 
 name: ${dataset_name}-${pose_name}-${rigid_name}-${non_rigid_name}-${texture_name}-${tag}
+project: default
 tag: default
 
 model:
