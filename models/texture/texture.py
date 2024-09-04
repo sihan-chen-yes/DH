@@ -50,9 +50,6 @@ class ColorMLP(ColorPrecompute):
         self.non_rigid_dim = cfg.get('non_rigid_dim', 0)
         self.latent_dim = cfg.get('latent_dim', 0)
 
-        self.use_reflection = cfg.get('use_reflection', False)
-
-
         if self.use_xyz:
             d_in += 3
         if self.use_cov:
@@ -68,8 +65,6 @@ class ColorMLP(ColorPrecompute):
             d_in += self.latent_dim
             self.frame_dict = metadata['frame_dict']
             self.latent = nn.Embedding(len(self.frame_dict), self.latent_dim)
-        # if self.use_reflection:
-        #     d_in += 3
 
         d_out = 3
         self.mlp = VanillaCondMLP(d_in, 0, d_out, cfg.mlp)
@@ -78,7 +73,6 @@ class ColorMLP(ColorPrecompute):
     def compose_input(self, gaussians, camera):
         features = gaussians.get_features.squeeze(-1)
         n_points = features.shape[0]
-        normal = None
         if self.use_xyz:
             aabb = self.metadata["aabb"]
             xyz_norm = aabb.normalize(gaussians.get_xyz, sym=True)
@@ -104,14 +98,7 @@ class ColorMLP(ColorPrecompute):
                                               device=dir_pp.device).transpose(0, 1)
                     dir_pp = torch.matmul(dir_pp, view_noise)
             dir_pp_normalized = dir_pp / (dir_pp.norm(dim=1, keepdim=True) + 1e-12)
-            if self.use_reflection:
-                assert normal != None
-                dot = torch.bmm(dir_pp_normalized.unsqueeze(2).transpose(1, 2), normal.unsqueeze(2)).squeeze(2)
-                dir_ref = 2 * dot * normal - dir_pp_normalized
-                dir_embed = self.sh_embed(dir_ref)
-            else:
-                # use view direction
-                dir_embed = self.sh_embed(dir_pp_normalized)
+            dir_embed = self.sh_embed(dir_pp_normalized)
             features = torch.cat([features, dir_embed], dim=1)
         if self.non_rigid_dim > 0:
             assert hasattr(gaussians, "non_rigid_feature")

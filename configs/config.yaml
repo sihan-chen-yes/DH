@@ -86,10 +86,6 @@ opt:
   lambda_normal: 0.1
   lambda_dist: 1000
 
-  #TODO
-  #reflection
-  lambda_normal_constraint: 0.2
-
   # densification configs
   percent_dense: 0.01
   densification_interval: 100
