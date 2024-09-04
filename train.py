@@ -321,7 +321,7 @@ def main(config):
         mode="disabled" if config.wandb_disable else None,
         name=wandb_name,
         entity='digital-human-s24',
-        project='3dgs-csh_train_pose_novel_view_baseline',
+        project=config.project,
         # entity='fast-avatar',
         dir=config.exp_dir,
         config=OmegaConf.to_container(config, resolve=True),
