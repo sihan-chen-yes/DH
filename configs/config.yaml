@@ -8,16 +8,13 @@ defaults:
   - option:
       - iter15k
 
-rotation_representation: quaternion # quaternion or 6d
-opt.lambda_nr_lipshitz_bound: 0 # coefficient for Lipschitz MLP
-
 hydra:
   run:
     dir: exp/${name}
   job:
     chdir: false
 
-name: ${dataset_name}-${pose_name}-${rigid_name}-${non_rigid_name}-${texture_name}-${rotation_representation}-${opt.lambda_nr_lipshitz_bound}-${tag}
+name: ${dataset_name}-${pose_name}-${rigid_name}-${non_rigid_name}-${texture_name}-${tag}
 project: default
 tag: default
 
@@ -79,12 +76,14 @@ opt:
   lambda_skinning: [10,1000,0.1]
   lambda_pose: 0.
   lambda_aiap_xyz: 1.0
-  lambda_aiap_cov: 0.001
+  lambda_aiap_cov: 100.0
 
   #2dgs
-  #TODO adjust
-  lambda_normal: 0.1
-  lambda_dist: 1000
+  lambda_normal: 0.05
+  normal_loss_from: 7000
+  #for bounded scene 100, for unbounded scene 1000
+  lambda_dist: 100
+  dist_loss_from: 3000
 
   # densification configs
   percent_dense: 0.01

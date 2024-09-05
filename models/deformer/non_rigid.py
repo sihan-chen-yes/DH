@@ -7,7 +7,6 @@ from models.network_utils import (HierarchicalPoseEncoder,
                                   HannwCondMLP,
                                   HashGrid)
 from utils.general_utils import quaternion_multiply
-from models.deformer.lipschitzMLP import LipshitzMLP
 
 class NonRigidDeform(nn.Module):
     def __init__(self, cfg):
@@ -38,19 +37,12 @@ class MLP(NonRigidDeform):
             self.latent = nn.Embedding(len(self.frame_dict), self.latent_dim)
 
         d_in = 3
-        self.rotation_representation = cfg.get('rotation_representation', 'quaternion')
-        if self.rotation_representation == 'quaternion':
-            self.rot_dim = 4
-        else:
-            self.rot_dim = 6
-
-        d_out = 3 + 2 + self.rot_dim
+        d_out = 3 + 2 + 4
         self.feature_dim = cfg.get('feature_dim', 0)
         d_out += self.feature_dim
 
         # output dimension: position + scale + rotation
         self.mlp = VanillaCondMLP(d_in, d_cond, d_out, cfg.mlp)
-        # self.mlp = LipshitzMLP(d_in + d_cond, [128,64,3], d_out = d_out, last_layer_linear=False)
         self.aabb = metadata['aabb']
 
         self.delay = cfg.get('delay', 0)
@@ -85,7 +77,7 @@ class MLP(NonRigidDeform):
 
         delta_xyz = deltas[:, :3]
         delta_scale = deltas[:, 3:5]
-        delta_rot = deltas[:, 5: 5+self.rot_dim]
+        delta_rot = deltas[:, 5:9]
 
         deformed_gaussians._xyz = gaussians._xyz + delta_xyz
 
@@ -104,22 +96,17 @@ class MLP(NonRigidDeform):
         if rot_offset == 'add':
             deformed_gaussians._rotation = gaussians._rotation + delta_rot
         elif rot_offset == 'mult':
-            if self.rotation_representation == 'quaternion':
-                q1 = delta_rot
-                q1[0] = 1. # [1,0,0,0] represents identity rotation
-                delta_rot = delta_rot[1:]
-                q2 = gaussians._rotation
-                # deformed_gaussians._rotation = quaternion_multiply(q1, q2)
-                deformed_gaussians._rotation = tf.quaternion_multiply(q1, q2)
-            elif self.rotation_representation == '6d':
-                delta_R = rotation_6d_to_matrix(delta_rot)
-                R = rotation_6d_to_matrix(gaussians._rotation)
-                deformed_gaussians._rotation = matrix_to_rotation_6d(torch.bmm(delta_R, R))
+            q1 = delta_rot
+            q1[0] = 1. # [1,0,0,0] represents identity rotation
+            delta_rot = delta_rot[1:]
+            q2 = gaussians._rotation
+            # deformed_gaussians._rotation = quaternion_multiply(q1, q2)
+            deformed_gaussians._rotation = tf.quaternion_multiply(q1, q2)
         else:
             raise ValueError
 
         if self.feature_dim > 0:
-            setattr(deformed_gaussians, "non_rigid_feature", deltas[:, 10:])
+            setattr(deformed_gaussians, "non_rigid_feature", deltas[:, 9:])
 
         if compute_loss:
             # regularization
@@ -141,7 +128,7 @@ class HannwMLP(NonRigidDeform):
         super().__init__(cfg)
         self.pose_encoder = HierarchicalPoseEncoder(**cfg.pose_encoder)
         # output dimension: position + scale + rotation
-        self.mlp = HannwCondMLP(3, self.pose_encoder.n_output_dims, 3 + 3 + 4, cfg.mlp, dim_coord=3)
+        self.mlp = HannwCondMLP(3, self.pose_encoder.n_output_dims, 3 + 2 + 4, cfg.mlp, dim_coord=3)
         self.aabb = metadata['aabb']
 
 
@@ -159,8 +146,8 @@ class HannwMLP(NonRigidDeform):
             deltas = deltas * torch.zeros_like(deltas)
 
         delta_xyz = deltas[:, :3]
-        delta_scale = deltas[:, 3:6]
-        delta_rot = deltas[:, -4:]
+        delta_scale = deltas[:, 3:5]
+        delta_rot = deltas[:, 5:9]
 
         deformed_gaussians._xyz = gaussians._xyz + delta_xyz
 
@@ -214,20 +201,13 @@ class HashGridwithMLP(NonRigidDeform):
             self.frame_dict = metadata['frame_dict']
             self.latent = nn.Embedding(len(self.frame_dict), self.latent_dim)
 
-        self.rotation_representation = cfg.get('rotation_representation', 'quaternion')
-        if self.rotation_representation == 'quaternion':
-            self.rot_dim = 4
-        else:
-            self.rot_dim = 6
-        d_out = 3 + 2 + self.rot_dim
-
+        d_out = 3 + 2 + 4
         self.feature_dim = cfg.get('feature_dim', 0)
         d_out += self.feature_dim
 
         self.aabb = metadata['aabb']
         self.hashgrid = HashGrid(cfg.hashgrid)
         self.mlp = VanillaCondMLP(self.hashgrid.n_output_dims, d_cond, d_out, cfg.mlp)
-        # self.mlp = LipshitzMLP(self.hashgrid.n_output_dims + d_cond, [128,64,d_out], last_layer_linear=False)
 
         self.delay = cfg.get('delay', 0)
 
@@ -258,12 +238,11 @@ class HashGridwithMLP(NonRigidDeform):
         xyz_norm = self.aabb.normalize(xyz, sym=True)
         deformed_gaussians = gaussians.clone()
         feature = self.hashgrid(xyz_norm)
-        # deltas = self.mlp(feature, cond=pose_feat)
-        deltas = self.mlp(torch.cat([feature, pose_feat.expand(feature.shape[0], -1)], dim= -1))
+        deltas = self.mlp(feature, cond=pose_feat)
 
         delta_xyz = deltas[:, :3]
         delta_scale = deltas[:, 3:5]
-        delta_rot = deltas[:, 5: 5+self.rot_dim]
+        delta_rot = deltas[:, 5:9]
 
         deformed_gaussians._xyz = gaussians._xyz + delta_xyz
 
@@ -282,34 +261,27 @@ class HashGridwithMLP(NonRigidDeform):
         if rot_offset == 'add':
             deformed_gaussians._rotation = gaussians._rotation + delta_rot
         elif rot_offset == 'mult':
-            if self.rotation_representation == 'quaternion':
-                q1 = delta_rot
-                q1[0] = 1.  # [1,0,0,0] represents identity rotation
-                delta_rot = delta_rot[1:]
-                q2 = gaussians._rotation
-                # deformed_gaussians._rotation = quaternion_multiply(q1, q2)
-                deformed_gaussians._rotation = tf.quaternion_multiply(q1, q2)
-            elif self.rotation_representation == '6d':
-                delta_R = rotation_6d_to_matrix(delta_rot)
-                R = rotation_6d_to_matrix(gaussians._rotation)
-                deformed_gaussians._rotation = matrix_to_rotation_6d(torch.bmm(delta_R, R))
+            q1 = delta_rot
+            q1[0] = 1.  # [1,0,0,0] represents identity rotation
+            delta_rot = delta_rot[1:]
+            q2 = gaussians._rotation
+            # deformed_gaussians._rotation = quaternion_multiply(q1, q2)
+            deformed_gaussians._rotation = tf.quaternion_multiply(q1, q2)
         else:
             raise ValueError
 
         if self.feature_dim > 0:
-            setattr(deformed_gaussians, "non_rigid_feature", deltas[:, 10:])
+            setattr(deformed_gaussians, "non_rigid_feature", deltas[:, 9:])
 
         if compute_loss:
             # regularization
             loss_xyz = torch.norm(delta_xyz, p=2, dim=1).mean()
             loss_scale = torch.norm(delta_scale, p=1, dim=1).mean()
             loss_rot = torch.norm(delta_rot, p=1, dim=1).mean()
-            loss_lipschitz = self.mlp.lipshitz_bound_full().mean()
             loss_reg = {
                 'nr_xyz': loss_xyz,
                 'nr_scale': loss_scale,
-                'nr_rot': loss_rot,
-                'nr_lipshitz_bound': loss_lipschitz,
+                'nr_rot': loss_rot
             }
         else:
             loss_reg = {}

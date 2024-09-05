@@ -174,8 +174,8 @@ def training(config):
 
         # 2dgs regularization
         #TODO iteration adjust iteration!
-        lambda_normal = config.opt.lambda_normal if iteration > 7000 else 0.0
-        lambda_dist = config.opt.lambda_dist if iteration > 3000 else 0.0
+        lambda_normal = config.opt.lambda_normal if iteration > config.opt.normal_loss_from else 0.0
+        lambda_dist = config.opt.lambda_dist if iteration > config.opt.dist_loss_from else 0.0
 
         rend_dist = render_pkg["rend_dist"]
         rend_normal = render_pkg['rend_normal']

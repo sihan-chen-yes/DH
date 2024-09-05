@@ -28,8 +28,7 @@ class GaussianModel:
             RS = build_scaling_rotation(torch.cat([scaling * scaling_modifier, torch.ones_like(scaling)], dim=-1), rotation).permute(0,2,1)
             trans = torch.zeros((center.shape[0], 4, 4), dtype=torch.float, device="cuda")
             trans[:,:3,:3] = RS
-            # trans[:, 3,:3] = center
-            trans[:, 3,:3] = 1
+            trans[:, 3,:3] = center
             trans[:, 3, 3] = 1
             return trans
         
@@ -68,9 +67,6 @@ class GaussianModel:
         self.percent_dense = 0
         self.spatial_lr_scale = 0
         self.setup_functions()
-        self.rotation_representation = cfg.get('rotation_representation', 'quaternion') # 'quaternion' or '6d'
-        assert self.rotation_representation in ['quaternion', '6d']
-
 
     def clone(self):
         cloned = GaussianModel(self.cfg)
@@ -142,12 +138,7 @@ class GaussianModel:
     
     @property
     def get_rotation(self):
-        if self.rotation_representation == 'quaternion':
-            return self.rotation_activation(self._rotation)
-        elif self.rotation_representation == '6d':
-            return self.rotation_representation(
-                rotation_matrix_to_quaternion(rotation_6d_to_matrix(self._rotation))
-            )
+        return self.rotation_activation(self._rotation)
     
     @property
     def get_xyz(self):
@@ -194,11 +185,7 @@ class GaussianModel:
 
         dist2 = torch.clamp_min(distCUDA2(torch.from_numpy(np.asarray(pcd.points)).float().cuda()), 0.0000001)
         scales = torch.log(torch.sqrt(dist2))[...,None].repeat(1, 2)
-        if self.rotation_representation == 'quaternion':
-            rots = torch.zeros((fused_point_cloud.shape[0], 4), device="cuda")
-            rots[:, 0] = 1
-        elif self.rotation_representation == '6d':
-            rots = matrix_to_rotation_6d(torch.eye(3, device='cuda').unsqueeze(0).repeat(fused_point_cloud.shape[0], 1, 1))
+        rots = torch.rand((fused_point_cloud.shape[0], 4), device="cuda")
 
         opacities = self.inverse_opacity_activation(0.1 * torch.ones((fused_point_cloud.shape[0], 1), dtype=torch.float, device="cuda"))
 
