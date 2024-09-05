@@ -67,7 +67,7 @@ class SMPLNN(RigidDeform):
 
         # setattr(deformed_gaussians, 'rotation_precomp', rotation_bar)
         # deformed_gaussians._rotation = tf.matrix_to_quaternion(rotation_bar)
-        # deformed_gaussians._rotation = rotation_matrix_to_quaternion(rotation_bar)
+        # deformed_gaussians.  = rotation_matrix_to_quaternion(rotation_bar)
         from pytorch3d.transforms import matrix_to_quaternion
         deformed_gaussians._rotation = matrix_to_quaternion(rotation_bar)
 

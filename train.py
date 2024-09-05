@@ -172,24 +172,7 @@ def training(config):
         loss += lambda_aiap_xyz * loss_aiap_xyz
         loss += lambda_aiap_cov * loss_aiap_cov
 
-        # 2dgs regularization
-        #TODO iteration adjust iteration!
-        # lambda_normal = config.opt.lambda_normal if iteration > 7000 else 0.0
-        # lambda_dist = config.opt.lambda_dist if iteration > 3000 else 0.0
-        #
-        # rend_dist = render_pkg["rend_dist"]
-        # rend_normal = render_pkg['rend_normal']
-        # surf_normal = render_pkg['surf_normal']
-        # normal_error = (1 - (rend_normal * surf_normal).sum(dim=0))[None]
-        #
-        # loss_normal = normal_error.mean()
-        # loss_dist = rend_dist.mean()
-        #
-        # loss += lambda_normal * loss_normal
-        # loss += lambda_dist * loss_dist
-
-        # TODO
-        # ref-nerf
+        # ref-nerf regularization
         lambda_normal_constraint = config.opt.lambda_normal_constraint
         rend_normal_constraint = render_pkg['rendered_normal_constraint']
         loss_normal_constraint = rend_normal_constraint[0, :, :].mean()
@@ -218,8 +201,6 @@ def training(config):
                 'loss/loss_skinning': loss_skinning.item(),
                 'loss/xyz_aiap_loss': loss_aiap_xyz.item(),
                 'loss/cov_aiap_loss': loss_aiap_cov.item(),
-                # 'loss/normal_loss': loss_normal.item(),
-                # 'loss/dist_loss': loss_dist.item(),
                 'loss/normal_constraint': loss_normal_constraint.item(),
                 'loss/total_loss': loss.item(),
                 'iter_time': elapsed,

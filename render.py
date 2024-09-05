@@ -131,8 +131,6 @@ def test(config):
 
         render_path = os.path.join(config.exp_dir, config.suffix, 'renders')
         makedirs(render_path, exist_ok=True)
-        gt_path = os.path.join(config.exp_dir, config.suffix, 'gt')
-        makedirs(gt_path, exist_ok=True)
 
         iter_start = torch.cuda.Event(enable_timing=True)
         iter_end = torch.cuda.Event(enable_timing=True)
@@ -204,7 +202,6 @@ def test(config):
             examples.clear()
 
             torchvision.utils.save_image(rendering, os.path.join(render_path, f"render_{view.image_name}.png"))
-            torchvision.utils.save_image(gt, os.path.join(gt_path, f"gt_{view.image_name}.png"))
 
             # evaluate
             if config.evaluate:
@@ -324,7 +321,7 @@ def main(config):
     wandb.init(
         mode="disabled" if config.wandb_disable else None,
         name=wandb_name,
-        project='2dgs-qzh',
+        project=config.project,
         entity='digital-human-s24',
         # entity='fast-avatar',
         dir=config.exp_dir,
