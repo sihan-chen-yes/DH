@@ -187,7 +187,7 @@ def training(config):
         distortion_map = rendering[8, :, :]
         # edge aware regularization is not really helpful so we disable it
         # distortion_map = get_edge_aware_distortion_map(gt_image, distortion_map)
-        distortion_loss = distortion_map.mean()
+        loss_distortion = distortion_map.mean()
 
         # depth normal consistency
         depth = rendering[6, :, :]
@@ -202,12 +202,12 @@ def training(config):
         render_normal_world = normal2.reshape(3, *render_normal.shape[1:])
 
         normal_error = 1 - (render_normal_world * depth_normal).sum(dim=0)
-        depth_normal_loss = normal_error.mean()
+        loss_depth_normal = normal_error.mean()
 
         lambda_distortion = opt.lambda_distortion if iteration >= opt.distortion_from_iter else 0.0
         lambda_depth_normal = opt.lambda_depth_normal if iteration >= opt.depth_normal_from_iter else 0.0
 
-        loss += depth_normal_loss * lambda_depth_normal + distortion_loss * lambda_distortion
+        loss += loss_depth_normal * lambda_depth_normal + loss_distortion * lambda_distortion
 
         # other regularization
         loss_reg = render_pkg["loss_reg"]
@@ -230,6 +230,8 @@ def training(config):
                 'loss/loss_skinning': loss_skinning.item(),
                 'loss/xyz_aiap_loss': loss_aiap_xyz.item(),
                 'loss/cov_aiap_loss': loss_aiap_cov.item(),
+                'loss/depth_normal_loss': loss_depth_normal.item(),
+                'loss/distortion_loss': loss_distortion.item(),
                 'loss/total_loss': loss.item(),
                 'iter_time': elapsed,
             }

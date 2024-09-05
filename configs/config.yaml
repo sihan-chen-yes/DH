@@ -76,7 +76,7 @@ opt:
   lambda_skinning: [10,1000,0.1]
   lambda_pose: 0.
   lambda_aiap_xyz: 1.0
-  lambda_aiap_cov: 0.001
+  lambda_aiap_cov: 100.0
   lambda_distortion: 100
   lambda_depth_normal: 0.05
   distortion_from_iter: 15000
