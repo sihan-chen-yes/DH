@@ -14,10 +14,10 @@ model:
     use_cov: false
     use_normal: false
     sh_degree: 3
-    non_rigid_dim: 0
+    non_rigid_dim: 16
     latent_dim: 16
 
-    cano_view_dir: false
+    cano_view_dir: true
     view_noise: 45
 
     mlp:
