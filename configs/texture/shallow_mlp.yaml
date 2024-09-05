@@ -15,13 +15,13 @@ model:
     #TODO
     use_normal: true
     sh_degree: 3
-    non_rigid_dim: 0
+    non_rigid_dim: 16
     latent_dim: 16
 
     #TODO
     use_reflection: true
 
-    cano_view_dir: false
+    cano_view_dir: true
     view_noise: 45
 
     mlp:

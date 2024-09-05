@@ -174,7 +174,7 @@ def render(data,
         n_points = normal.shape[0]
 
         dir_pp = (pc.get_xyz - data.camera_center.repeat(n_points, 1))
-        T_fwd = torch.eye(3, device=dir_pp.device).unsqueeze(0).repeat(dir_pp.shape[0], 1, 1)
+        T_fwd = pc.fwd_transform
         R_bwd = T_fwd[:, :3, :3].transpose(1, 2)
         dir_pp = torch.matmul(R_bwd, dir_pp.unsqueeze(-1)).squeeze(-1)
         dir_pp_normalized = dir_pp / (dir_pp.norm(dim=1, keepdim=True) + 1e-12)
