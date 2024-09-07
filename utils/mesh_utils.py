@@ -101,11 +101,12 @@ class GaussianExtractor(object):
         self.viewpoint_stack = viewpoint_stack
         for i, viewpoint_cam in tqdm(enumerate(self.viewpoint_stack), desc="reconstruct radiance fields"):
             render_pkg = self.render(viewpoint_cam, iteration, self.scene, return_opacity=True, return_depth=True)
-            rgb = render_pkg['render']
-            alpha = render_pkg['opacity_render']
+            rendering = render_pkg['render']
             # normal = torch.nn.functional.normalize(render_pkg['rend_normal'], dim=0)
-            depth = render_pkg['surf_depth']
             # depth_normal = render_pkg['surf_normal']
+            rgb = rendering[0:3, :, :]
+            depth = rendering[6,:,:][None, :]
+            alpha = rendering[7,:,:][None, :]
             self.rgbmaps.append(rgb.cpu())
             self.depthmaps.append(depth.cpu())
             self.alphamaps.append(alpha.cpu())
@@ -161,8 +162,8 @@ class GaussianExtractor(object):
             depth = self.depthmaps[i]
 
             # if we have mask provided, use it
-            if mask_backgrond and (self.viewpoint_stack[i].gt_alpha_mask is not None):
-                depth[(self.viewpoint_stack[i].gt_alpha_mask < 0.5)] = 0
+            # if mask_backgrond and (self.viewpoint_stack[i].gt_alpha_mask is not None):
+            #     depth[(self.viewpoint_stack[i].gt_alpha_mask < 0.5)] = 0
 
             # make open3d rgbd
             rgbd = o3d.geometry.RGBDImage.create_from_color_and_depth(

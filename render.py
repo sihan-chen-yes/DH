@@ -95,6 +95,8 @@ def test(config):
 
         evaluator = PSEvaluator() if config.dataset.name == 'people_snapshot' else Evaluator()
 
+        gaussians.compute_3D_filter(cameras=scene.test_dataset)
+
         psnrs = []
         ssims = []
         lpipss = []
@@ -174,6 +176,7 @@ def extract_mesh(config):
         load_ckpt = os.path.join(scene.save_dir, "ckpt" + str(config.opt.iterations) + ".pth")
     scene.load_checkpoint(load_ckpt)
 
+    gaussians.compute_3D_filter(cameras=scene.test_dataset)
     bg_color = [1, 1, 1] if config.dataset.white_background else [0, 0, 0]
     background = torch.tensor(bg_color, dtype=torch.float32, device="cuda")
 

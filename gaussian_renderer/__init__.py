@@ -130,7 +130,7 @@ def render(data,
     #     R = torch.from_numpy(data.R).to(device=opacity.device).type_as(means3D)
     #     T = torch.from_numpy(data.T).to(device=opacity.device).type_as(means3D)
     #     # points in camera coordinate frame
-    #     points_cam = means3D @ R.T + T[None, :]
+    #     points_cam = means3D @ R + T[None, :]
     #     depths = points_cam[:, 2][:, None].expand(-1, 3)
     #     depth_image, _ = rasterizer(
     #         means3D=means3D,
