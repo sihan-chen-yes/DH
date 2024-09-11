@@ -99,10 +99,10 @@ pipeline:
   compute_cov3D_python: false
   debug: false
   depth_ratio: 1.0 # todo: adjust
-  num_cluster: 1
-  voxel_size: 0.004
-  sdf_trunc: 0.016
-  depth_trunc: 3.0
+  num_cluster: 50
+  voxel_size: -1.0
+  sdf_trunc: -1.0
+  depth_trunc: -1.0
   mesh_res: 1024
 
   pose_noise: 0.1
