@@ -21,7 +21,7 @@ from scene import Scene, GaussianModel
 from utils.general_utils import fix_random, Evaluator, PSEvaluator
 from tqdm import tqdm
 from utils.loss_utils import full_aiap_loss
-from utils.general_utils import colormap
+from utils.general_utils import colormap, transform_normals
 from utils.mesh_utils import GaussianExtractor, to_cam_open3d, post_process_mesh
 import open3d as o3d
 
@@ -284,8 +284,8 @@ def validation(iteration, testing_iterations, testing_interval, scene : Scene, e
                 opacity_image = torch.clamp(render_pkg["opacity_render"], 0.0, 1.0)
 
                 #2dgs
-                rend_normal_image = render_pkg["rend_normal"] * 0.5 + 0.5
-
+                rend_normal_image = render_pkg["rend_normal"]
+                rend_normal_image = transform_normals(rend_normal_image)
                 rend_dist_image = render_pkg["rend_dist"]
                 rend_dist_image = colormap(rend_dist_image.cpu().numpy()[0])
 
@@ -294,7 +294,8 @@ def validation(iteration, testing_iterations, testing_interval, scene : Scene, e
                 surf_depth_image = surf_depth_image / norm
                 surf_depth_image = colormap(surf_depth_image.cpu().numpy()[0], cmap='turbo')
 
-                surf_normal_image = render_pkg["surf_normal"] * 0.5 + 0.5
+                surf_normal_image = render_pkg["surf_normal"]
+                surf_normal_image = transform_normals(surf_normal_image)
 
                 wandb_img = wandb.Image(opacity_image[None],
                                         caption=config['name'] + "_view_{}/render_opacity".format(data.image_name))

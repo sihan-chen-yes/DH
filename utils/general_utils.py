@@ -327,3 +327,11 @@ def colormap(img, cmap='jet'):
     img = torch.from_numpy(data / 255.).float().permute(2,0,1)
     plt.close()
     return img
+
+def transform_normals(normals):
+    """ Convert world-space normal map into OpenGL camera space
+    """
+    # Convert OpenCV to OpenGL convention
+    normals = normals * torch.tensor([1.0, -1.0, -1.0], device=normals.device)[:, None, None]
+
+    return normals
