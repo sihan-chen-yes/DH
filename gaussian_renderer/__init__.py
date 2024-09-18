@@ -123,6 +123,7 @@ def render(data,
     # todo use additional loss
     # get normal map
     render_normal = allmap[2:5]
+    # render_normal in world coordindate frame
     render_normal = (render_normal.permute(1,2,0) @ (data.world_view_transform[:3,:3].T)).permute(2,0,1)
     
     # get median depth map

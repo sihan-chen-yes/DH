@@ -173,7 +173,6 @@ def training(config):
         loss += lambda_aiap_cov * loss_aiap_cov
 
         # 2dgs regularization
-        #TODO iteration adjust iteration!
         lambda_normal = config.opt.lambda_normal if iteration > config.opt.normal_loss_from else 0.0
         lambda_dist = config.opt.lambda_dist if iteration > config.opt.dist_loss_from else 0.0
 
@@ -285,7 +284,7 @@ def validation(iteration, testing_iterations, testing_interval, scene : Scene, e
 
                 #2dgs
                 rend_normal_image = render_pkg["rend_normal"]
-                rend_normal_image = transform_normals(rend_normal_image)
+                rend_normal_image = transform_normals(rend_normal_image, data.world_view_transform.T)
                 rend_dist_image = render_pkg["rend_dist"]
                 rend_dist_image = colormap(rend_dist_image.cpu().numpy()[0])
 
@@ -295,7 +294,7 @@ def validation(iteration, testing_iterations, testing_interval, scene : Scene, e
                 surf_depth_image = colormap(surf_depth_image.cpu().numpy()[0], cmap='turbo')
 
                 surf_normal_image = render_pkg["surf_normal"]
-                surf_normal_image = transform_normals(surf_normal_image)
+                surf_normal_image = transform_normals(surf_normal_image, data.world_view_transform.T)
 
                 wandb_img = wandb.Image(opacity_image[None],
                                         caption=config['name'] + "_view_{}/render_opacity".format(data.image_name))

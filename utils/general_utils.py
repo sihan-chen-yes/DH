@@ -328,10 +328,17 @@ def colormap(img, cmap='jet'):
     plt.close()
     return img
 
-def transform_normals(normals):
+def transform_normals(normals, w2c):
     """ Convert world-space normal map into OpenGL camera space
     """
+    # Convert from world to view frame
+    normals = (normals.permute(1, 2, 0) @ w2c.T[:3,:3]).permute(2, 0, 1)
+    # normalize norm length to 1
+    normals = torch.nn.functional.normalize(normals, dim=0)
     # Convert OpenCV to OpenGL convention
+    # y and z axis need flipped
     normals = normals * torch.tensor([1.0, -1.0, -1.0], device=normals.device)[:, None, None]
+    # map to [0, 1] from [-1, 1]
+    normals = (normals + 1) / 2
 
     return normals
