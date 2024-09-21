@@ -51,7 +51,8 @@ class SMPLNN(RigidDeform):
 
         xyz = gaussians.get_xyz
         n_pts = xyz.shape[0]
-        pts_W = self.query_weights(xyz)
+        # pts_W = self.query_weights(xyz)
+        pts_W = gaussians.LBS_weight
         T_fwd = torch.matmul(pts_W, bone_transforms.view(-1, 16)).view(n_pts, 4, 4).float()
 
         deformed_gaussians = gaussians.clone()

@@ -429,7 +429,7 @@ class ZJUMoCapDataset(Dataset):
                 verts = self.metadata['smpl_verts']
                 faces = self.faces
                 mesh = trimesh.Trimesh(vertices=verts, faces=faces)
-                n_points = 50_000
+                n_points = 100_000
 
                 xyz = mesh.sample(n_points)
                 rgb = np.ones_like(xyz) * 255

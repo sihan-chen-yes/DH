@@ -192,6 +192,8 @@ def training(config):
         for name, value in loss_reg.items():
             lbd = opt.get(f"lambda_{name}", 0.)
             lbd = C(iteration, lbd)
+            if name == "mesh_normal":
+                lbd *= (1 - iteration / config.opt.mesh_normal_loss_until) if iteration < config.opt.mesh_normal_loss_until else 0.0
             loss += lbd * value
         loss.backward()
 
@@ -229,7 +231,6 @@ def training(config):
 
             # Log and save
             validation(iteration, testing_iterations, testing_interval, scene, evaluator,(pipe, background))
-            # extract_mesh(iteration, testing_iterations, testing_interval, gaussians, scene, dataset, pipe, config.exp_dir)
             if (iteration in saving_iterations):
                 print("\n[ITER {}] Saving Gaussians".format(iteration))
                 scene.save(iteration)

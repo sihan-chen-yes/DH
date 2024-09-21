@@ -4,6 +4,7 @@ import numpy as np
 from .deformer import get_deformer
 from .pose_correction import get_pose_correction
 from .texture import get_texture
+from .interpolater import get_interpolater
 
 class GaussianConverter(nn.Module):
     def __init__(self, cfg, metadata):
@@ -12,6 +13,7 @@ class GaussianConverter(nn.Module):
         self.metadata = metadata
 
         self.pose_correction = get_pose_correction(cfg.model.pose_correction, metadata)
+        self.interpolater = get_interpolater(cfg.model.interpolate, metadata)
         self.deformer = get_deformer(cfg.model.deformer, metadata)
         self.texture = get_texture(cfg.model.texture, metadata)
 
@@ -31,6 +33,7 @@ class GaussianConverter(nn.Module):
              'lr': self.cfg.opt.get('texture_lr', 0.)},
             {'params': [p for n, p in self.texture.named_parameters() if 'latent' in n],
              'lr': self.cfg.opt.get('tex_latent_lr', 0.), 'weight_decay': self.cfg.opt.get('latent_weight_decay', 0.05)},
+            {'params': self.interpolater.parameters(), 'lr': self.cfg.opt.get('interpolate_lr', 0)},
         ]
         self.optimizer = torch.optim.Adam(params=opt_params, lr=0.001, eps=1e-15)
 
@@ -48,9 +51,11 @@ class GaussianConverter(nn.Module):
             camera = camera.copy()
             camera.rots = camera.rots + torch.randn(camera.rots.shape, device=camera.rots.device) * pose_noise
 
-        deformed_gaussians, loss_reg_deformer = self.deformer(gaussians, camera, iteration, compute_loss)
+        interpolated_gaussians, loss_reg_interpolater = self.interpolater(gaussians, camera, compute_loss)
+        deformed_gaussians, loss_reg_deformer = self.deformer(interpolated_gaussians, camera, iteration, compute_loss)
 
         loss_reg.update(loss_reg_pose)
+        loss_reg.update(loss_reg_interpolater)
         loss_reg.update(loss_reg_deformer)
 
         color_precompute = self.texture(deformed_gaussians, camera)
