@@ -3,8 +3,9 @@ defaults:
   - dataset: zjumocap_377_mono
   - pose_correction: direct
   - texture: shallow_mlp
-  - rigid: skinning_field
+  - rigid: smpl_nn
   - non_rigid: hashgrid
+  - interpolate: mlp
   - option:
       - iter15k
 

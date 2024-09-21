@@ -191,6 +191,9 @@ def training(config):
                 'loss/loss_skinning': loss_skinning.item(),
                 'loss/xyz_aiap_loss': loss_aiap_xyz.item(),
                 'loss/cov_aiap_loss': loss_aiap_cov.item(),
+                'loss/mdist_loss': loss_reg['mdist'].item(),
+                'loss/disp_loss': loss_reg['disp'].item(),
+                'loss/base_scale_loss': loss_reg['base_scale'].item(),
                 'loss/total_loss': loss.item(),
                 'iter_time': elapsed,
             }

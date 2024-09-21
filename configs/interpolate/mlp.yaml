@@ -1,0 +1,29 @@
+# @package _global_
+
+interpolate_name: mlp
+
+model:
+  interpolate:
+    name: mlp
+
+    mlp:
+      n_neurons: 256
+      n_hidden_layers: 8
+      skip_in: [ 4 ]
+      cond_in: [ 0 ]
+      multires: 6
+
+      last_layer_init: false
+
+    KNN:
+      Kg: 3
+      Kv: 17
+
+    base_scale: 0.005
+
+opt:
+  interpolate_lr: 1e-3
+  # mesh based
+  lambda_mdist: 0.1
+  lambda_disp: 0.02
+  lambda_base_scale: 10
