@@ -4,7 +4,7 @@ defaults:
   - pose_correction: direct
   - texture: shallow_mlp
   - rigid: smpl_nn
-  - non_rigid: hashgrid
+  - non_rigid: identity
   - interpolate: mlp
   - option:
       - iter15k

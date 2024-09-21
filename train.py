@@ -175,6 +175,8 @@ def training(config):
         for name, value in loss_reg.items():
             lbd = opt.get(f"lambda_{name}", 0.)
             lbd = C(iteration, lbd)
+            if name == "mesh_normal":
+                lbd *= (1 - iteration / config.opt.mesh_normal_loss_until) if iteration < config.opt.mesh_normal_loss_until else 0.0
             loss += lbd * value
         loss.backward()
 

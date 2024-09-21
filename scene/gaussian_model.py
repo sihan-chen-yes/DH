@@ -69,11 +69,14 @@ class GaussianModel:
         self.spatial_lr_scale = 0
         self.setup_functions()
 
+        self.LBS_weight = torch.empty(0)
+
     def clone(self):
         cloned = GaussianModel(self.cfg)
 
         properties = ["active_sh_degree",
                       "non_rigid_feature",
+                      "LBS_weight"
                       ]
         for property in properties:
             if hasattr(self, property):
@@ -165,7 +168,7 @@ class GaussianModel:
             return
         if self.active_sh_degree < self.max_sh_degree:
             self.active_sh_degree += 1
-
+            
     def get_opacity_loss(self):
         # opacity classification loss
         opacity = self.get_opacity

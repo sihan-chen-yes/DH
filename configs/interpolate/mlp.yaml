@@ -8,8 +8,8 @@ model:
 
     mlp:
       n_neurons: 256
-      n_hidden_layers: 8
-      skip_in: [ 4 ]
+      n_hidden_layers: 4
+      skip_in: [ 2 ]
       cond_in: [ 0 ]
       multires: 6
 
@@ -22,8 +22,10 @@ model:
     base_scale: 0.005
 
 opt:
-  interpolate_lr: 1e-3
+  interpolate_lr: 0.005
   # mesh based
   lambda_mdist: 0.1
   lambda_disp: 0.02
   lambda_base_scale: 10
+  lambda_mesh_normal: 0.0
+  mesh_normal_loss_until: 5000

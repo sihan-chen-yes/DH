@@ -33,8 +33,7 @@ class GaussianConverter(nn.Module):
              'lr': self.cfg.opt.get('texture_lr', 0.)},
             {'params': [p for n, p in self.texture.named_parameters() if 'latent' in n],
              'lr': self.cfg.opt.get('tex_latent_lr', 0.), 'weight_decay': self.cfg.opt.get('latent_weight_decay', 0.05)},
-            # TODO
-            {'params': self.interpolater.parameters(), 'lr': self.cfg.opt.get('interpolate_lr', 0.05)},
+            {'params': self.interpolater.parameters(), 'lr': self.cfg.opt.get('interpolate_lr', 0)},
         ]
         self.optimizer = torch.optim.Adam(params=opt_params, lr=0.001, eps=1e-15)
 
