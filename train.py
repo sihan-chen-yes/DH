@@ -107,6 +107,10 @@ def training(config):
 
         lambda_mask = C(iteration, config.opt.lambda_mask)
         use_mask = lambda_mask > 0.
+
+        if dataset.random_background:
+            background = torch.tensor(np.random.rand(3), dtype=torch.float32, device="cuda")
+
         render_pkg = render(data, iteration, scene, pipe, background, compute_loss=True, return_opacity=use_mask)
 
         image, viewspace_point_tensor, visibility_filter, radii = render_pkg["render"], render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"]
@@ -114,7 +118,10 @@ def training(config):
 
         # Loss
         gt_image = data.original_image.cuda()
-
+        bg_mask = torch.where(data.original_mask.cuda().type(torch.int) == 0, True, False).squeeze(0)
+        gt_image = gt_image.permute(1, 2, 0)
+        gt_image[bg_mask] = background
+        gt_image = gt_image.permute(2, 0, 1)
         lambda_l1 = C(iteration, config.opt.lambda_l1)
         lambda_dssim = C(iteration, config.opt.lambda_dssim)
         loss_l1 = torch.tensor(0.).cuda()
@@ -256,6 +263,7 @@ def training(config):
                 scene.save_checkpoint(iteration)
 
 def validation(iteration, testing_iterations, testing_interval, scene : Scene, evaluator, renderArgs):
+    pipe, background = renderArgs
     # Report test and samples of training set
     if testing_interval > 0:
         if not iteration % testing_interval == 0:
@@ -280,7 +288,12 @@ def validation(iteration, testing_iterations, testing_interval, scene : Scene, e
                 data = getattr(scene, config['name'] + '_dataset')[data_idx]
                 render_pkg = render(data, iteration, scene, *renderArgs, compute_loss=False, return_opacity=True)
                 image = torch.clamp(render_pkg["render"], 0.0, 1.0)
-                gt_image = torch.clamp(data.original_image.to("cuda"), 0.0, 1.0)
+                gt_image = data.original_image.to("cuda")
+                bg_mask = torch.where(data.original_mask.cuda().type(torch.int) == 0, True, False).squeeze(0)
+                gt_image = gt_image.permute(1, 2, 0)
+                gt_image[bg_mask] = background
+                gt_image = torch.clamp(gt_image.permute(2, 0, 1), 0.0, 1.0)
+
                 opacity_image = torch.clamp(render_pkg["opacity_render"], 0.0, 1.0)
 
                 #2dgs

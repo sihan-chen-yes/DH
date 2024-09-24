@@ -44,6 +44,7 @@ dataset:
   resolution: -1
   padding: 0.1
   white_background: false
+  random_background: true
   data_device: cuda
   eval: false
 
