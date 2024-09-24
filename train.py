@@ -21,7 +21,7 @@ from scene import Scene, GaussianModel
 from utils.general_utils import fix_random, Evaluator, PSEvaluator
 from tqdm import tqdm
 from utils.loss_utils import full_aiap_loss
-from utils.general_utils import colormap, transform_normals
+from utils.general_utils import colormap, transform_normals, get_boundary_mask
 from utils.mesh_utils import GaussianExtractor, to_cam_open3d, post_process_mesh
 import open3d as o3d
 
@@ -107,13 +107,38 @@ def training(config):
 
         lambda_mask = C(iteration, config.opt.lambda_mask)
         use_mask = lambda_mask > 0.
-        render_pkg = render(data, iteration, scene, pipe, background, compute_loss=True, return_opacity=use_mask)
 
+        gt_image = data.original_image.cuda()
+        gt_mask = data.original_mask.cuda()
+
+        if dataset.random_background:
+            background = torch.tensor(np.random.rand(3), dtype=torch.float32, device="cuda")
+            # use random background
+            gt_image = gt_image * gt_mask + background[:, None, None] * (1 - gt_mask)
+
+        render_pkg = render(data, iteration, scene, pipe, background, compute_loss=True, return_opacity=use_mask)
+        # rendered img
         image, viewspace_point_tensor, visibility_filter, radii = render_pkg["render"], render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"]
         opacity = render_pkg["opacity_render"] if use_mask else None
 
-        # Loss
-        gt_image = data.original_image.cuda()
+        rend_dist = render_pkg["rend_dist"]
+        rend_normal = render_pkg['rend_normal']
+        surf_normal = render_pkg['surf_normal']
+
+        if dataset.foreground_crop:
+            boundary_mask = torch.from_numpy(get_boundary_mask(gt_mask)).cuda()
+            boundary_mask_img = 1. - boundary_mask.to(torch.float32)
+            # linear fusion only
+            # care foreground and background, not care edge
+            image = image * boundary_mask_img[None, :, :] + (1. - boundary_mask_img[None, :, :]) * background[:, None, None]
+            gt_image = gt_image * boundary_mask_img[None, :, :] + (1. - boundary_mask_img[None, :, :]) * background[:, None, None]
+            opacity = opacity * boundary_mask_img[None, :, :]
+            gt_mask = gt_mask * boundary_mask_img[None, :, :]
+
+            # if only care foreground loss
+            rend_dist = rend_dist * gt_mask
+            rend_normal = rend_normal * gt_mask
+            surf_normal = surf_normal * gt_mask
 
         lambda_l1 = C(iteration, config.opt.lambda_l1)
         lambda_dssim = C(iteration, config.opt.lambda_dssim)
@@ -142,7 +167,6 @@ def training(config):
             loss_perceptual = torch.tensor(0.)
 
         # mask loss
-        gt_mask = data.original_mask.cuda()
         if not use_mask:
             loss_mask = torch.tensor(0.).cuda()
         elif config.opt.mask_loss_type == 'bce':
@@ -176,9 +200,7 @@ def training(config):
         lambda_normal = config.opt.lambda_normal if iteration > config.opt.normal_loss_from else 0.0
         lambda_dist = config.opt.lambda_dist if iteration > config.opt.dist_loss_from else 0.0
 
-        rend_dist = render_pkg["rend_dist"]
-        rend_normal = render_pkg['rend_normal']
-        surf_normal = render_pkg['surf_normal']
+        # mask, only care foreground
         normal_error = (1 - (rend_normal * surf_normal).sum(dim=0))[None]
 
         loss_normal = normal_error.mean()
@@ -277,9 +299,14 @@ def validation(iteration, testing_iterations, testing_interval, scene : Scene, e
             examples = []
             for idx, data_idx in enumerate(config['cameras']):
                 data = getattr(scene, config['name'] + '_dataset')[data_idx]
+                pipe, background = renderArgs
                 render_pkg = render(data, iteration, scene, *renderArgs, compute_loss=False, return_opacity=True)
                 image = torch.clamp(render_pkg["render"], 0.0, 1.0)
+
+                gt_mask = data.original_mask.to("cuda")
                 gt_image = torch.clamp(data.original_image.to("cuda"), 0.0, 1.0)
+                # use random background
+                gt_image = gt_image * gt_mask + background[:, None, None] * (1 - gt_mask)
                 opacity_image = torch.clamp(render_pkg["opacity_render"], 0.0, 1.0)
 
                 #2dgs
