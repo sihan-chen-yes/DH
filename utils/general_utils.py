@@ -342,3 +342,26 @@ def transform_normals(normals, w2c):
     normals = (normals + 1) / 2
 
     return normals
+
+def get_boundary_mask(mask, kernel_size = 5):
+    """
+    :param mask: np.uint8
+    :param kernel_size:
+    :return:
+    """
+    # mask_bk = mask.copy()
+    # thres = 128
+    # mask[mask < thres] = 0
+    # mask[mask > thres] = 1
+    kernel = np.ones((kernel_size, kernel_size), np.uint8)
+    mask_erode = cv2.erode(mask.cpu().numpy(), kernel)
+    mask_dilate = cv2.dilate(mask.cpu().numpy(), kernel)
+    boundary_mask = (mask_dilate - mask_erode) == 1
+    # boundary_mask = np.logical_or(boundary_mask,
+    #                               np.logical_and(mask_bk > 5, mask_bk < 250))
+
+    # boundary_mask_resized = cv.resize(boundary_mask.astype(np.uint8), (0, 0), fx = 0.5, fy = 0.5)
+    # cv.imshow('boundary_mask', boundary_mask_resized.astype(np.uint8) * 255)
+    # cv.waitKey(0)
+
+    return boundary_mask

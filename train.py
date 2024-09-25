@@ -21,7 +21,7 @@ from scene import Scene, GaussianModel
 from utils.general_utils import fix_random, Evaluator, PSEvaluator
 from tqdm import tqdm
 from utils.loss_utils import full_aiap_loss
-from utils.general_utils import colormap, transform_normals
+from utils.general_utils import colormap, transform_normals, get_boundary_mask
 from utils.mesh_utils import GaussianExtractor, to_cam_open3d, post_process_mesh
 import open3d as o3d
 
@@ -122,6 +122,13 @@ def training(config):
         gt_image = gt_image.permute(1, 2, 0)
         gt_image[bg_mask] = background
         gt_image = gt_image.permute(2, 0, 1)
+
+        gt_mask = data.original_mask.cuda()
+        bounary_mask = torch.from_numpy(get_boundary_mask(gt_mask)).cuda()
+        boundary_mask_img = 1. - bounary_mask.to(torch.float32)
+        image = image * boundary_mask_img + (1. - boundary_mask_img) * background[:, None, None]
+        gt_image = gt_image * boundary_mask_img + (1. - boundary_mask_img) * background[:, None, None]
+
         lambda_l1 = C(iteration, config.opt.lambda_l1)
         lambda_dssim = C(iteration, config.opt.lambda_dssim)
         loss_l1 = torch.tensor(0.).cuda()
