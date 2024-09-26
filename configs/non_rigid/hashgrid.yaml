@@ -12,7 +12,7 @@ model:
       delay: 3000
 
       feature_dim: ${model.texture.non_rigid_dim}
-      latent_dim: 0
+      latent_dim: 16
       pose_encoder:
         num_joints: 24
         rel_joints: false

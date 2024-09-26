@@ -67,9 +67,10 @@ opt:
   lr_ratio: 0.01
 
   # loss weights
-  lambda_l1: 1.
-  lambda_dssim: 0.
-  lambda_perceptual: 1e-2
+  #TODO
+  lambda_l1: 0.8
+  lambda_dssim: 0.2
+  lambda_perceptual: 0.01
   mask_loss_type: l1
 #  lambda_mask: [0.1,5000,0]
   lambda_mask: 0.1
@@ -82,8 +83,8 @@ opt:
   #2dgs
   lambda_normal: 0.05
   normal_loss_from: 7000
-  #for bounded scene 100, for unbounded scene 1000
-  lambda_dist: 100
+  #for bounded scene 1000, for unbounded scene 100
+  lambda_dist: 1000
   dist_loss_from: 3000
 
   # densification configs
@@ -99,7 +100,7 @@ pipeline:
   convert_SHs_python: false
   compute_cov3D_python: false
   debug: false
-  depth_ratio: 1.0 # todo: adjust
+  depth_ratio: 0.0 # todo: adjust
   num_cluster: 50
   voxel_size: -1.0
   sdf_trunc: -1.0

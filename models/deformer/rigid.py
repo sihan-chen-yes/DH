@@ -51,7 +51,50 @@ class SMPLNN(RigidDeform):
 
         xyz = gaussians.get_xyz
         n_pts = xyz.shape[0]
-        # pts_W = self.query_weights(xyz)
+        pts_W = self.query_weights(xyz)
+        T_fwd = torch.matmul(pts_W, bone_transforms.view(-1, 16)).view(n_pts, 4, 4).float()
+
+        deformed_gaussians = gaussians.clone()
+        deformed_gaussians.set_fwd_transform(T_fwd.detach())
+
+        homo_coord = torch.ones(n_pts, 1, dtype=torch.float32, device=xyz.device)
+        x_hat_homo = torch.cat([xyz, homo_coord], dim=-1).view(n_pts, 4, 1)
+        x_bar = torch.matmul(T_fwd, x_hat_homo)[:, :3, 0]
+        deformed_gaussians._xyz = x_bar
+
+        rotation_hat = build_rotation(gaussians._rotation)
+        rotation_bar = torch.matmul(T_fwd[:, :3, :3], rotation_hat)
+
+        # setattr(deformed_gaussians, 'rotation_precomp', rotation_bar)
+        # deformed_gaussians._rotation = tf.matrix_to_quaternion(rotation_bar)
+        # deformed_gaussians.  = rotation_matrix_to_quaternion(rotation_bar)
+        from pytorch3d.transforms import matrix_to_quaternion
+        deformed_gaussians._rotation = matrix_to_quaternion(rotation_bar)
+
+        return deformed_gaussians
+
+    def regularization(self):
+        return {}
+
+class SMPLNNINTERPOLATION(RigidDeform):
+    def __init__(self, cfg, metadata):
+        super().__init__(cfg)
+        self.smpl_verts = torch.from_numpy(metadata["smpl_verts"]).float().cuda()
+        self.skinning_weights = torch.from_numpy(metadata["skinning_weights"]).float().cuda()
+
+    def query_weights(self, xyz):
+        # find the nearest vertex
+        knn_ret = ops.knn_points(xyz.unsqueeze(0), self.smpl_verts.unsqueeze(0))
+        p_idx = knn_ret.idx.squeeze()
+        pts_W = self.skinning_weights[p_idx, :]
+
+        return pts_W
+
+    def forward(self, gaussians, iteration, camera):
+        bone_transforms = camera.bone_transforms
+
+        xyz = gaussians.get_xyz
+        n_pts = xyz.shape[0]
         pts_W = gaussians.LBS_weight
         T_fwd = torch.matmul(pts_W, bone_transforms.view(-1, 16)).view(n_pts, 4, 4).float()
 
@@ -255,6 +298,7 @@ def get_rigid_deform(cfg, metadata):
     model_dict = {
         "identity": Identity,
         "smpl_nn": SMPLNN,
+        "smpl_nn_interpolation": SMPLNNINTERPOLATION,
         "skinning_field": SkinningField,
     }
     return model_dict[name](cfg, metadata)
