@@ -31,7 +31,7 @@ def render(data,
     
     Background tensor (bg_color) must be on GPU!
     """
-    pc, loss_reg, colors_precomp = scene.convert_gaussians(data, iteration, compute_loss) # todo: only convert 2d rotation
+    pc, loss_reg, colors_precomp = scene.convert_gaussians(data, iteration, compute_loss)
 
     # Create zero tensor. We will use it to make pytorch return gradients of the 2D (screen-space) means
     screenspace_points = torch.zeros_like(pc.get_xyz, dtype=pc.get_xyz.dtype, requires_grad=True, device="cuda") + 0
@@ -120,7 +120,6 @@ def render(data,
     render_alpha = allmap[1:2]
 
 
-    # todo use additional loss
     # get normal map
     render_normal = allmap[2:5]
     # render_normal in world coordindate frame
@@ -132,7 +131,7 @@ def render(data,
 
     # get expected depth map
     render_depth_expected = allmap[0:1]
-    render_depth_expected = (render_depth_expected / (render_alpha + 1e-4))
+    render_depth_expected = (render_depth_expected / (render_alpha + 1e-12))
     render_depth_expected = torch.nan_to_num(render_depth_expected, 0, 0)
     
     # get depth distortion map
@@ -140,8 +139,8 @@ def render(data,
 
     # psedo surface attributes
     # surf depth is either median or expected by setting depth_ratio to 1 or 0
-    # for bounded scene, use median depth, i.e., depth_ratio = 1; 
-    # for unbounded scene, use expected depth, i.e., depth_ration = 0, to reduce disk anliasing.
+    # for bounded scene, use median depth, i.e., depth_ratio = 0;
+    # for unbounded scene, use expected depth, i.e., depth_ration = 1, to reduce disk anliasing.
     surf_depth = render_depth_expected * (1-pipe.depth_ratio) + (pipe.depth_ratio) * render_depth_median
     
     # assume the depth points form the 'surface' and generate psudo surface normal for regularizations.
@@ -149,21 +148,6 @@ def render(data,
     surf_normal = surf_normal.permute(2,0,1)
     # remember to multiply with accum_alpha since render_normal is unnormalized.
     surf_normal = surf_normal * (render_alpha).detach()
-
-
-    opacity_image = render_alpha
-    # if return_opacity:
-    #     opacity_image, _ = rasterizer(
-    #         means3D=means3D,
-    #         means2D=means2D,
-    #         shs=None,
-    #         colors_precomp=torch.ones(opacity.shape[0], 3, device=opacity.device),
-    #         opacities=opacity,
-    #         scales=scales,
-    #         rotations=rotations,
-    #         cov3D_precomp=cov3D_precomp)
-        # opacity_image = opacity_image[:1]
-
 
     # Those Gaussians that were frustum culled or had a radius of 0 were not visible.
     # They will be excluded from value updates used in the splitting criteria.
@@ -173,9 +157,9 @@ def render(data,
             "visibility_filter" : radii > 0,
             "radii": radii,
             "loss_reg": loss_reg,
-            "opacity_render": opacity_image,
+            "opacity_render": render_alpha,
 
-            'rend_alpha': opacity_image,
+            'rend_alpha': render_alpha,
             'rend_normal': render_normal,
             'rend_dist': render_dist,
             'surf_depth': surf_depth,

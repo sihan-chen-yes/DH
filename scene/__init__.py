@@ -14,7 +14,7 @@ import torch
 from models import GaussianConverter
 from scene.gaussian_model import GaussianModel
 from dataset import load_dataset
-
+from utils.dataset_utils import getNerfppNorm
 
 class Scene:
 
@@ -41,6 +41,10 @@ class Scene:
             self.test_dataset = load_dataset(cfg.dataset, split='reconstruct')
         else:
             raise ValueError
+
+        # for multi-view
+        # nerf_normalization = getNerfppNorm(self.test_dataset)
+        # self.cameras_extent = nerf_normalization["radius"]
 
         self.cameras_extent = self.metadata['cameras_extent']
 
