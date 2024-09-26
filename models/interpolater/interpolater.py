@@ -40,6 +40,9 @@ class Interpolater(nn.Module):
         rots[:, 0] = 1
         self._vertex_rotation = nn.Parameter(rots)
 
+        opacities = inverse_sigmoid(0.95 * torch.ones((self._vertex_xyz.shape[0], 1), dtype=torch.float, device="cuda"))
+        self._vertex_opacity = nn.Parameter(opacities.requires_grad_(True))
+
         self.displacement_predictor = VanillaCondMLP(dim_in=3, dim_cond=24 * 3, dim_out=3, config=cfg.mlp)
 
         self.Kg = cfg.KNN.Kg
@@ -76,7 +79,8 @@ class Interpolater(nn.Module):
         # TODO quaternion interpolation
         interpolated_gaussians._rotation = torch.bmm(
             interpolate_weights.unsqueeze(1), torch.nn.functional.normalize(self._vertex_rotation)[nn_ix]).squeeze(1)
-
+        interpolated_gaussians._opacity = inverse_sigmoid(torch.bmm(
+            interpolate_weights.unsqueeze(1), torch.sigmoid(self._vertex_opacity)[nn_ix]).squeeze(1))
         interpolated_gaussians.LBS_weight = torch.bmm(interpolate_weights.unsqueeze(1), self._LBS_weight[nn_ix]).squeeze(1)
         if compute_loss:
             # regularization
