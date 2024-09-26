@@ -16,6 +16,13 @@ from pytorch3d.transforms import matrix_to_euler_angles
 
 from pytorch3d.ops.knn import knn_points
 
+class Identity(nn.Module):
+    def __init__(self, cfg, metadata):
+        super().__init__()
+
+    def forward(self, gaussians, camera, compute_loss=True):
+        return gaussians, {}
+
 class Interpolater(nn.Module):
 
     def __init__(self, cfg, metadata):
@@ -96,6 +103,7 @@ class Interpolater(nn.Module):
 def get_interpolater(cfg, metadata):
     name = cfg.name
     model_dict = {
+        "identity": Identity,
         "mlp": Interpolater,
     }
     return model_dict[name](cfg, metadata)
