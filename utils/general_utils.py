@@ -353,6 +353,7 @@ def get_boundary_mask(mask, kernel_size = 5):
     # thres = 128
     # mask[mask < thres] = 0
     # mask[mask > thres] = 1
+    mask = mask.squeeze(0)
     kernel = np.ones((kernel_size, kernel_size), np.uint8)
     mask_erode = cv2.erode(mask.cpu().numpy(), kernel)
     mask_dilate = cv2.dilate(mask.cpu().numpy(), kernel)

@@ -126,8 +126,8 @@ def training(config):
         gt_mask = data.original_mask.cuda()
         bounary_mask = torch.from_numpy(get_boundary_mask(gt_mask)).cuda()
         boundary_mask_img = 1. - bounary_mask.to(torch.float32)
-        image = image * boundary_mask_img + (1. - boundary_mask_img) * background[:, None, None]
-        gt_image = gt_image * boundary_mask_img + (1. - boundary_mask_img) * background[:, None, None]
+        image = image * boundary_mask_img[None, :, :] + (1. - boundary_mask_img[None, :, :]) * background[:, None, None]
+        gt_image = gt_image * boundary_mask_img[None, :, :] + (1. - boundary_mask_img[None, :, :]) * background[:, None, None]
 
         lambda_l1 = C(iteration, config.opt.lambda_l1)
         lambda_dssim = C(iteration, config.opt.lambda_dssim)
