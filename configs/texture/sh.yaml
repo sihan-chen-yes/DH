@@ -10,6 +10,7 @@ model:
     name: sh2rgb
     cano_view_dir: true
     view_noise: 45
+    use_ref: true
 
     non_rigid_dim: 0
 

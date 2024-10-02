@@ -17,10 +17,22 @@ class ColorPrecompute(nn.Module):
 class SH2RGB(ColorPrecompute):
     def __init__(self, cfg, metadata):
         super().__init__(cfg, metadata)
-        
+        self.use_ref = cfg.get('use_ref', False)
+
     def forward(self, gaussians, camera):
         shs_view = gaussians.get_features.transpose(1, 2).view(-1, 3, (gaussians.max_sh_degree + 1) ** 2)
         dir_pp = (gaussians.get_xyz - camera.camera_center.repeat(gaussians.get_features.shape[0], 1))
+        # normalize
+        dir_pp = dir_pp / (dir_pp.norm(dim=1, keepdim=True) + 1e-12)
+        # use reflection direction of view direction w.r.t normal
+        if self.use_ref:
+            # normalized via activation
+            normal = build_rotation(gaussians.get_rotation)[:, :, -1]
+            # incident ray
+            w_i = -dir_pp
+            # reflection ray, normalized
+            w_r = 2 * (torch.bmm(w_i.unsqueeze(1), normal.unsqueeze(2)).squeeze(2)) * normal - w_i
+            dir_pp = w_r
         if self.cfg.cano_view_dir:
             T_fwd = gaussians.fwd_transform
             R_bwd = T_fwd[:, :3, :3].transpose(1, 2)
@@ -32,8 +44,7 @@ class SH2RGB(ColorPrecompute):
                                           device=dir_pp.device).transpose(0, 1)
                 dir_pp = torch.matmul(dir_pp, view_noise)
 
-        dir_pp_normalized = dir_pp / (dir_pp.norm(dim=1, keepdim=True) + 1e-12)
-        sh2rgb = eval_sh(gaussians.active_sh_degree, shs_view, dir_pp_normalized)
+        sh2rgb = eval_sh(gaussians.active_sh_degree, shs_view, dir_pp)
         colors_precomp = torch.clamp_min(sh2rgb + 0.5, 0.0)
         return colors_precomp
         
@@ -49,6 +60,8 @@ class ColorMLP(ColorPrecompute):
         self.cano_view_dir = cfg.get('cano_view_dir', False)
         self.non_rigid_dim = cfg.get('non_rigid_dim', 0)
         self.latent_dim = cfg.get('latent_dim', 0)
+
+        self.use_ref = cfg.get('use_ref', False)
 
         if self.use_xyz:
             d_in += 3
@@ -87,6 +100,17 @@ class ColorMLP(ColorPrecompute):
             features = torch.cat([features, normal], dim=1)
         if self.sh_degree > 0:
             dir_pp = (gaussians.get_xyz - camera.camera_center.repeat(n_points, 1))
+            # normalize
+            dir_pp = dir_pp / (dir_pp.norm(dim=1, keepdim=True) + 1e-12)
+            # use reflection direction of view direction w.r.t normal
+            if self.use_ref:
+                # normalized via activation
+                normal = build_rotation(gaussians.get_rotation)[:, :, -1]
+                # incident ray
+                w_i = -dir_pp
+                # reflection ray, normalized
+                w_r = 2 * (torch.bmm(w_i.unsqueeze(1), normal.unsqueeze(2)).squeeze(2)) * normal - w_i
+                dir_pp = w_r
             if self.cano_view_dir:
                 T_fwd = gaussians.fwd_transform
                 R_bwd = T_fwd[:, :3, :3].transpose(1, 2)
@@ -97,8 +121,7 @@ class ColorMLP(ColorPrecompute):
                                               dtype=torch.float32,
                                               device=dir_pp.device).transpose(0, 1)
                     dir_pp = torch.matmul(dir_pp, view_noise)
-            dir_pp_normalized = dir_pp / (dir_pp.norm(dim=1, keepdim=True) + 1e-12)
-            dir_embed = self.sh_embed(dir_pp_normalized)
+            dir_embed = self.sh_embed(dir_pp)
             features = torch.cat([features, dir_embed], dim=1)
         if self.non_rigid_dim > 0:
             assert hasattr(gaussians, "non_rigid_feature")
