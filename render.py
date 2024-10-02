@@ -57,7 +57,7 @@ def predict(config):
             view = scene.test_dataset[idx]
             iter_start.record()
 
-            render_pkg = render(view, config.opt.iterations, scene, config.pipeline, background,
+            render_pkg = render(view, config.opt.iterations, scene, config.pipeline, config.opt, background,
                                 compute_loss=False, return_opacity=False)
             iter_end.record()
             torch.cuda.synchronize()
@@ -260,7 +260,7 @@ def extract_mesh(config):
     evaluator = PSEvaluator() if config.dataset.name == 'people_snapshot' else Evaluator()
 
     bg_color = [1,1,1] if dataset_config.white_background else [0, 0, 0]
-    gaussExtractor = GaussianExtractor(gaussians, scene, render, pipe, bg_color=bg_color)
+    gaussExtractor = GaussianExtractor(gaussians, scene, render, pipe, opt, bg_color=bg_color)
 
     print("export mesh ...")
     os.makedirs(reconstruct_dir, exist_ok=True)

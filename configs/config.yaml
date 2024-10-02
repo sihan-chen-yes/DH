@@ -88,6 +88,10 @@ opt:
   lambda_dist: 1000
   dist_loss_from: 3000
 
+  #ref-nerf
+  lambda_dir_normal_constraint: 0.1
+  cano_space_transformation: true
+
   # densification configs
   percent_dense: 0.01
   densification_interval: 100

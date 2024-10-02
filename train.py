@@ -116,7 +116,7 @@ def training(config):
             # use random background
             gt_image = gt_image * gt_mask + background[:, None, None] * (1 - gt_mask)
 
-        render_pkg = render(data, iteration, scene, pipe, background, compute_loss=True, return_opacity=use_mask)
+        render_pkg = render(data, iteration, scene, pipe, opt, background, compute_loss=True, return_opacity=use_mask)
         # rendered img
         image, viewspace_point_tensor, visibility_filter, radii = render_pkg["render"], render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"]
         opacity = render_pkg["opacity_render"] if use_mask else None
@@ -124,6 +124,8 @@ def training(config):
         rend_dist = render_pkg["rend_dist"]
         rend_normal = render_pkg['rend_normal']
         surf_normal = render_pkg['surf_normal']
+
+        dir_normal_constraint = render_pkg['dir_normal_constraint']
 
         if dataset.foreground_crop:
             boundary_mask = torch.from_numpy(get_boundary_mask(gt_mask)).cuda()
@@ -139,6 +141,7 @@ def training(config):
             rend_dist = rend_dist * gt_mask
             rend_normal = rend_normal * gt_mask
             surf_normal = surf_normal * gt_mask
+            dir_normal_constraint = dir_normal_constraint * gt_mask
 
         lambda_l1 = C(iteration, config.opt.lambda_l1)
         lambda_dssim = C(iteration, config.opt.lambda_dssim)
@@ -199,6 +202,8 @@ def training(config):
         # 2dgs regularization
         lambda_normal = config.opt.lambda_normal if iteration > config.opt.normal_loss_from else 0.0
         lambda_dist = config.opt.lambda_dist if iteration > config.opt.dist_loss_from else 0.0
+        #TODO
+        lambda_dir_normal_constraint = config.opt.lambda_dir_normal_constraint
 
         # mask, only care foreground
         normal_error = (1 - (rend_normal * surf_normal).sum(dim=0))[None]
@@ -206,8 +211,12 @@ def training(config):
         loss_normal = normal_error.mean()
         loss_dist = rend_dist.mean()
 
+        loss_dir_normal_constraint = dir_normal_constraint.mean()
+
+
         loss += lambda_normal * loss_normal
         loss += lambda_dist * loss_dist
+        loss += lambda_dir_normal_constraint * loss_dir_normal_constraint
 
         # regularization
         loss_reg = render_pkg["loss_reg"]
@@ -233,6 +242,7 @@ def training(config):
                 'loss/cov_aiap_loss': loss_aiap_cov.item(),
                 'loss/normal_loss': loss_normal.item(),
                 'loss/dist_loss': loss_dist.item(),
+                'loss/dir_normal_constraint_loss': loss_dir_normal_constraint.item(),
                 'loss/total_loss': loss.item(),
                 'iter_time': elapsed,
             }
@@ -250,7 +260,7 @@ def training(config):
                 progress_bar.close()
 
             # Log and save
-            validation(iteration, testing_iterations, testing_interval, scene, evaluator,(pipe, background))
+            validation(iteration, testing_iterations, testing_interval, scene, evaluator, pipe, opt, background)
             # extract_mesh(iteration, testing_iterations, testing_interval, gaussians, scene, dataset, pipe, config.exp_dir)
             if (iteration in saving_iterations):
                 print("\n[ITER {}] Saving Gaussians".format(iteration))
@@ -276,7 +286,7 @@ def training(config):
             if iteration in checkpoint_iterations:
                 scene.save_checkpoint(iteration)
 
-def validation(iteration, testing_iterations, testing_interval, scene : Scene, evaluator, renderArgs):
+def validation(iteration, testing_iterations, testing_interval, scene : Scene, evaluator, pipe, opt, background):
     # Report test and samples of training set
     if testing_interval > 0:
         if not iteration % testing_interval == 0:
@@ -299,8 +309,7 @@ def validation(iteration, testing_iterations, testing_interval, scene : Scene, e
             examples = []
             for idx, data_idx in enumerate(config['cameras']):
                 data = getattr(scene, config['name'] + '_dataset')[data_idx]
-                pipe, background = renderArgs
-                render_pkg = render(data, iteration, scene, *renderArgs, compute_loss=False, return_opacity=True)
+                render_pkg = render(data, iteration, scene, pipe, opt, background, compute_loss=False, return_opacity=True)
                 image = torch.clamp(render_pkg["render"], 0.0, 1.0)
 
                 gt_mask = data.original_mask.to("cuda")
