@@ -21,7 +21,7 @@ from scene import Scene, GaussianModel
 from utils.general_utils import fix_random, Evaluator, PSEvaluator
 from tqdm import tqdm
 from utils.loss_utils import full_aiap_loss
-from utils.general_utils import colormap, transform_normals, get_boundary_mask
+from utils.general_utils import colormap, transform_normals, get_boundary_mask, linear_to_srgb, srgb_to_linear
 from utils.mesh_utils import GaussianExtractor, to_cam_open3d, post_process_mesh
 import open3d as o3d
 
@@ -112,15 +112,17 @@ def training(config):
         gt_mask = data.original_mask.cuda()
 
         if dataset.random_background:
+            # sRGB
             background = torch.tensor(np.random.rand(3), dtype=torch.float32, device="cuda")
             # use random background
             gt_image = gt_image * gt_mask + background[:, None, None] * (1 - gt_mask)
 
-        render_pkg = render(data, iteration, scene, pipe, opt, background, compute_loss=True, return_opacity=use_mask)
+        render_pkg = render(data, iteration, scene, pipe, opt, srgb_to_linear(background), compute_loss=True, return_opacity=use_mask)
         # rendered img
         image, viewspace_point_tensor, visibility_filter, radii = render_pkg["render"], render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"]
+        #linear to sRGB
+        image = linear_to_srgb(image)
         opacity = render_pkg["opacity_render"] if use_mask else None
-
         rend_dist = render_pkg["rend_dist"]
         rend_normal = render_pkg['rend_normal']
         surf_normal = render_pkg['surf_normal']
@@ -309,13 +311,16 @@ def validation(iteration, testing_iterations, testing_interval, scene : Scene, e
             examples = []
             for idx, data_idx in enumerate(config['cameras']):
                 data = getattr(scene, config['name'] + '_dataset')[data_idx]
-                render_pkg = render(data, iteration, scene, pipe, opt, background, compute_loss=False, return_opacity=True)
-                image = torch.clamp(render_pkg["render"], 0.0, 1.0)
+                render_pkg = render(data, iteration, scene, pipe, opt, srgb_to_linear(background), compute_loss=False, return_opacity=True)
+                # linear to sRGB
+                image = linear_to_srgb(render_pkg["render"])
 
                 gt_mask = data.original_mask.to("cuda")
-                gt_image = torch.clamp(data.original_image.to("cuda"), 0.0, 1.0)
+
+                gt_image = data.original_image.to("cuda")
                 # use random background
                 gt_image = gt_image * gt_mask + background[:, None, None] * (1 - gt_mask)
+
                 opacity_image = torch.clamp(render_pkg["opacity_render"], 0.0, 1.0)
 
                 #2dgs

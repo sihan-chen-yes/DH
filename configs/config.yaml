@@ -91,6 +91,8 @@ opt:
   #ref-nerf
   lambda_dir_normal_constraint: 0.1
   cano_space_transformation: true
+  # TODO
+  lambda_shading_normal_offset_loss: 0.01
 
   # densification configs
   percent_dense: 0.01

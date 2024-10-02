@@ -50,10 +50,11 @@ class GaussianConverter(nn.Module):
 
         deformed_gaussians, loss_reg_deformer = self.deformer(gaussians, camera, iteration, compute_loss)
 
+        color_precompute, loss_reg_texture = self.texture(deformed_gaussians, camera)
+
         loss_reg.update(loss_reg_pose)
         loss_reg.update(loss_reg_deformer)
-
-        color_precompute = self.texture(deformed_gaussians, camera)
+        loss_reg.update(loss_reg_texture)
 
         return deformed_gaussians, loss_reg, color_precompute
 

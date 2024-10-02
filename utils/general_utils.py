@@ -366,3 +366,39 @@ def get_boundary_mask(mask, kernel_size = 5):
     # cv.waitKey(0)
 
     return boundary_mask
+
+def linear_to_srgb(linear_color, eps=None):
+    '''
+    Assumes `linear` is in [0, 1], see https://en.wikipedia.org/wiki/SRGB.
+    Parameters
+    ----------
+    linear_color
+    eps
+
+    Returns
+    -------
+    sRGB
+    '''
+    if eps is None:
+        eps = torch.finfo(linear_color.dtype).eps
+    srgb0 = 323 / 25 * linear_color
+    srgb1 = (211 * torch.clamp(linear_color, min=eps)**(5 / 12) - 11) / 200
+    return torch.where(linear_color <= 0.0031308, srgb0, srgb1)
+
+def srgb_to_linear(srgb, eps=None):
+    '''
+    Assumes `linear` is in [0, 1], see https://en.wikipedia.org/wiki/SRGB.
+    Parameters
+    ----------
+    srgb
+    eps
+
+    Returns
+    -------
+    linear_color
+    '''
+    if eps is None:
+        eps = torch.finfo(torch.float32).eps
+    linear0 = 25 / 323 * srgb
+    linear1 = torch.clamp(((200 * srgb + 11) / (211)), min=eps)**(12 / 5)
+    return torch.where(srgb <= 0.04045, linear0, linear1)
