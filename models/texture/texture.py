@@ -219,7 +219,7 @@ class FusionMLP(ColorPrecompute):
             latent_code = latent_code.expand(shading_normal_features.shape[0], -1)
             shading_normal_features = torch.cat([shading_normal_features, latent_code], dim=1)
 
-        normal = build_rotation(gaussians.get_rotation)[:, :, -1]
+        normal = self.normal_activation(build_rotation(gaussians.get_rotation)[:, :, -1])
         if self.cano_view_dir:
             T_fwd = gaussians.fwd_transform
             R_bwd = T_fwd[:, :3, :3].transpose(1, 2)
@@ -234,11 +234,15 @@ class FusionMLP(ColorPrecompute):
         shading_normal_features = torch.cat([shading_normal_features, normal_embed], dim=1)
         return shading_normal_features
 
-    def compose_input(self, gaussians, camera):
+    def compose_input(self, gaussians, camera, shading_normal_offset=None):
         diffuse_features = gaussians.get_features.squeeze(-1)
         specular_features = torch.empty(0).cuda()
         blending_features = gaussians.get_features.squeeze(-1)
         n_points = diffuse_features.shape[0]
+        if shading_normal_offset != None:
+            normal = self.normal_activation(build_rotation(gaussians.get_rotation)[:, :, -1] + shading_normal_offset)
+        else:
+            normal = self.normal_activation(build_rotation(gaussians.get_rotation)[:, :, -1])
         # if self.use_xyz:
         #     aabb = self.metadata["aabb"]
         #     xyz_norm = aabb.normalize(gaussians.get_xyz, sym=True)
@@ -257,8 +261,6 @@ class FusionMLP(ColorPrecompute):
             dir_pp = dir_pp / (dir_pp.norm(dim=1, keepdim=True) + 1e-12)
             # use reflection direction of view direction w.r.t normal
             if self.use_ref:
-                # normalized via activation
-                normal = build_rotation(gaussians.get_rotation)[:, :, -1]
                 # incident ray
                 w_i = -dir_pp
                 # reflection ray, normalized
@@ -291,8 +293,6 @@ class FusionMLP(ColorPrecompute):
             diffuse_features = torch.cat([diffuse_features, latent_code], dim=1)
             specular_features = torch.cat([specular_features, latent_code], dim=1)
             blending_features = torch.cat([blending_features, latent_code], dim=1)
-
-        normal = build_rotation(gaussians.get_rotation)[:, :, -1]
         if self.cano_view_dir:
             T_fwd = gaussians.fwd_transform
             R_bwd = T_fwd[:, :3, :3].transpose(1, 2)
@@ -309,22 +309,20 @@ class FusionMLP(ColorPrecompute):
         return diffuse_features, specular_features, blending_features
 
     def forward(self, gaussians, camera):
-        # shading_normal_features = self.compose_shading_input(gaussians, camera)
-        # shading_normal_offset = self.shading_normal_offset_activation(self.shading_normal_mlp(shading_normal_features))
-        diffuse_features, specular_features, blending_features = self.compose_input(gaussians, camera)
+        shading_normal_features = self.compose_shading_input(gaussians, camera)
+        # shading_normal_offset prediction
+        # offset -> [-1, 1]
+        shading_normal_offset = self.shading_normal_offset_activation(self.shading_normal_mlp(shading_normal_features))
+        diffuse_features, specular_features, blending_features = self.compose_input(gaussians, camera, shading_normal_offset)
         diffuse_output = self.color_activation(self.diffuse_mlp(diffuse_features))
         specular_output = self.color_activation(self.specular_mlp(specular_features))
         blending_output = self.blending_activation(self.blending_mlp(blending_features))
-        # TODO blending weight
         # linear composition
         color_precomp = (1 - blending_output) * diffuse_output + blending_output * specular_output
         # change to sRGB space and map to [0, 1]
-        # shading_normal_offset_loss = shading_normal_offset.mean()
-        # loss_reg ={
-        #     "shading_normal_offset_loss": shading_normal_offset_loss
-        # }
-        loss_reg = {
-
+        shading_normal_offset_loss = torch.norm(shading_normal_offset, p=1, dim=1).mean()
+        loss_reg ={
+            "shading_normal_offset_loss": shading_normal_offset_loss
         }
         return color_precomp, loss_reg
 
