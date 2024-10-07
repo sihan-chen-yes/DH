@@ -21,7 +21,7 @@ from scene import Scene, GaussianModel
 from utils.general_utils import fix_random, Evaluator, PSEvaluator
 from tqdm import tqdm
 from utils.loss_utils import full_aiap_loss
-from utils.general_utils import colormap, transform_normals, get_boundary_mask, linear_to_srgb, srgb_to_linear
+from utils.general_utils import colormap, transform_normals, get_boundary_mask
 from utils.mesh_utils import GaussianExtractor, to_cam_open3d, post_process_mesh
 import open3d as o3d
 
@@ -117,11 +117,9 @@ def training(config):
             # use random background
             gt_image = gt_image * gt_mask + background[:, None, None] * (1 - gt_mask)
 
-        render_pkg = render(data, iteration, scene, pipe, opt, srgb_to_linear(background), compute_loss=True, return_opacity=use_mask)
+        render_pkg = render(data, iteration, scene, pipe, opt, background, compute_loss=True, return_opacity=use_mask)
         # rendered img
         image, viewspace_point_tensor, visibility_filter, radii = render_pkg["render"], render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"]
-        #linear to sRGB
-        image = linear_to_srgb(image)
         opacity = render_pkg["opacity_render"] if use_mask else None
         rend_dist = render_pkg["rend_dist"]
         rend_normal = render_pkg['rend_normal']
@@ -263,7 +261,6 @@ def training(config):
 
             # Log and save
             validation(iteration, testing_iterations, testing_interval, scene, evaluator, pipe, opt, background)
-            # extract_mesh(iteration, testing_iterations, testing_interval, gaussians, scene, dataset, pipe, config.exp_dir)
             if (iteration in saving_iterations):
                 print("\n[ITER {}] Saving Gaussians".format(iteration))
                 scene.save(iteration)
@@ -311,9 +308,8 @@ def validation(iteration, testing_iterations, testing_interval, scene : Scene, e
             examples = []
             for idx, data_idx in enumerate(config['cameras']):
                 data = getattr(scene, config['name'] + '_dataset')[data_idx]
-                render_pkg = render(data, iteration, scene, pipe, opt, srgb_to_linear(background), compute_loss=False, return_opacity=True)
-                # linear to sRGB
-                image = linear_to_srgb(render_pkg["render"])
+                render_pkg = render(data, iteration, scene, pipe, opt, background, compute_loss=False, return_opacity=True)
+                image = render_pkg["render"]
 
                 gt_mask = data.original_mask.to("cuda")
 
@@ -381,37 +377,6 @@ def validation(iteration, testing_iterations, testing_interval, scene : Scene, e
     wandb.log({'total_points': scene.gaussians.get_xyz.shape[0]})
     torch.cuda.empty_cache()
     scene.train()
-
-def extract_mesh(iteration, testing_iterations, testing_interval, gaussians, scene, dataset_config, pipe, train_dir):
-    if testing_interval > 0:
-        if not iteration % testing_interval == 0:
-            return
-    else:
-        if not iteration in testing_iterations:
-            return
-
-    bg_color = [1,1,1] if dataset_config.white_background else [0, 0, 0]
-    gaussExtractor = GaussianExtractor(gaussians, scene, render, pipe, bg_color=bg_color)
-
-    print("export mesh ...")
-    os.makedirs(train_dir, exist_ok=True)
-    # set the active_sh to 0 to export only diffuse texture
-    gaussExtractor.gaussians.active_sh_degree = 0
-    gaussExtractor.reconstruction(scene.test_dataset, iteration)
-    # extract the mesh and save
-
-    name = 'fuse.ply'
-    depth_trunc = (gaussExtractor.radius * 2.0) if pipe.depth_trunc < 0 else pipe.depth_trunc
-    voxel_size = (depth_trunc / pipe.mesh_res) if pipe.voxel_size < 0 else pipe.voxel_size
-    sdf_trunc = 5.0 * voxel_size if pipe.sdf_trunc < 0 else pipe.sdf_trunc
-    mesh = gaussExtractor.extract_mesh_bounded(voxel_size=voxel_size, sdf_trunc=sdf_trunc, depth_trunc=depth_trunc)
-
-    o3d.io.write_triangle_mesh(os.path.join(train_dir, name), mesh)
-    print("mesh saved at {}".format(os.path.join(train_dir, name)))
-    # post-process the mesh and save, saving the largest N clusters
-    mesh_post = post_process_mesh(mesh, cluster_to_keep=pipe.num_cluster)
-    o3d.io.write_triangle_mesh(os.path.join(train_dir, name.replace('.ply', '_post.ply')), mesh_post)
-    print("mesh post processed saved at {}".format(os.path.join(train_dir, name.replace('.ply', '_post.ply'))))
 
 @hydra.main(version_base=None, config_path="configs", config_name="config")
 def main(config):

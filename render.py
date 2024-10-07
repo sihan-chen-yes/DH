@@ -17,7 +17,7 @@ from tqdm import tqdm, trange
 from os import makedirs
 from gaussian_renderer import render
 import torchvision
-from utils.general_utils import fix_random
+from utils.general_utils import fix_random, transform_normals, srgb_to_linear
 from scene import GaussianModel
 
 from utils.general_utils import Evaluator, PSEvaluator
@@ -68,7 +68,8 @@ def predict(config):
             opacity_image = torch.clamp(render_pkg["opacity_render"], 0.0, 1.0)
 
             # 2dgs
-            rend_normal_image = render_pkg["rend_normal"] * 0.5 + 0.5
+            rend_normal_image = render_pkg["rend_normal"]
+            rend_normal_image = transform_normals(rend_normal_image, view.world_view_transform.T)
 
             rend_dist_image = render_pkg["rend_dist"]
             rend_dist_image = colormap(rend_dist_image.cpu().numpy()[0])
@@ -78,7 +79,9 @@ def predict(config):
             surf_depth_image = surf_depth_image / norm
             surf_depth_image = colormap(surf_depth_image.cpu().numpy()[0], cmap='turbo')
 
-            surf_normal_image = render_pkg["surf_normal"] * 0.5 + 0.5
+            surf_normal_image = render_pkg["surf_normal"]
+            surf_normal_image = transform_normals(surf_normal_image, view.world_view_transform.T)
+
 
             wandb_img = wandb.Image(opacity_image[None],
                                     caption=config['name'] + "_view_{}/render_opacity".format(view.image_name))
@@ -148,7 +151,7 @@ def test(config):
             view = scene.test_dataset[idx]
             iter_start.record()
 
-            render_pkg = render(view, config.opt.iterations, scene, config.pipeline, background,
+            render_pkg = render(view, config.opt.iterations, scene, config.pipeline, config.opt, background,
                                 compute_loss=False, return_opacity=False)
 
             iter_end.record()
@@ -160,7 +163,8 @@ def test(config):
             opacity_image = torch.clamp(render_pkg["opacity_render"], 0.0, 1.0)
 
             # 2dgs
-            rend_normal_image = render_pkg["rend_normal"] * 0.5 + 0.5
+            rend_normal_image = render_pkg["rend_normal"]
+            rend_normal_image = transform_normals(rend_normal_image, view.world_view_transform.T)
 
             rend_dist_image = render_pkg["rend_dist"]
             rend_dist_image = colormap(rend_dist_image.cpu().numpy()[0])
@@ -170,7 +174,8 @@ def test(config):
             surf_depth_image = surf_depth_image / norm
             surf_depth_image = colormap(surf_depth_image.cpu().numpy()[0], cmap='turbo')
 
-            surf_normal_image = render_pkg["surf_normal"] * 0.5 + 0.5
+            surf_normal_image = render_pkg["surf_normal"]
+            surf_normal_image = transform_normals(surf_normal_image, view.world_view_transform.T)
 
             gt = view.original_image[:3, :, :]
 
@@ -254,33 +259,37 @@ def extract_mesh(config):
     bg_color = [1, 1, 1] if config.dataset.white_background else [0, 0, 0]
     background = torch.tensor(bg_color, dtype=torch.float32, device="cuda")
 
-    iter_start = torch.cuda.Event(enable_timing=True)
-    iter_end = torch.cuda.Event(enable_timing=True)
+    # iter_start = torch.cuda.Event(enable_timing=True)
+    # iter_end = torch.cuda.Event(enable_timing=True)
+    #
+    # evaluator = PSEvaluator() if config.dataset.name == 'people_snapshot' else Evaluator()
 
-    evaluator = PSEvaluator() if config.dataset.name == 'people_snapshot' else Evaluator()
-
-    bg_color = [1,1,1] if dataset_config.white_background else [0, 0, 0]
-    gaussExtractor = GaussianExtractor(gaussians, scene, render, pipe, opt, bg_color=bg_color)
-
-    print("export mesh ...")
-    os.makedirs(reconstruct_dir, exist_ok=True)
+    gaussExtractor = GaussianExtractor(gaussians, scene, render, pipe, opt, bg_color=background)
     # set the active_sh to 0 to export only diffuse texture
     gaussExtractor.gaussians.active_sh_degree = 0
-    gaussExtractor.reconstruction(scene.test_dataset, 0)
-    # extract the mesh and save
+    os.makedirs(reconstruct_dir, exist_ok=True)
+    reconstruct_frames = scene.test_dataset.reconstruct_frames
 
-    name = 'fuse.ply'
+    gaussExtractor.estimate_bounding_sphere(scene.test_dataset)
     depth_trunc = (gaussExtractor.radius * 2.0) if pipe.depth_trunc < 0 else pipe.depth_trunc
     voxel_size = (depth_trunc / pipe.mesh_res) if pipe.voxel_size < 0 else pipe.voxel_size
     sdf_trunc = 5.0 * voxel_size if pipe.sdf_trunc < 0 else pipe.sdf_trunc
-    mesh = gaussExtractor.extract_mesh_bounded(voxel_size=voxel_size, sdf_trunc=sdf_trunc, depth_trunc=depth_trunc)
 
-    o3d.io.write_triangle_mesh(os.path.join(reconstruct_dir, name), mesh)
-    print("mesh saved at {}".format(os.path.join(reconstruct_dir, name)))
-    # post-process the mesh and save, saving the largest N clusters
-    mesh_post = post_process_mesh(mesh, cluster_to_keep=pipe.num_cluster)
-    o3d.io.write_triangle_mesh(os.path.join(reconstruct_dir, name.replace('.ply', '_post.ply')), mesh_post)
-    print("mesh post processed saved at {}".format(os.path.join(reconstruct_dir, name.replace('.ply', '_post.ply'))))
+    for frame in range(reconstruct_frames[0], reconstruct_frames[1], reconstruct_frames[2]):
+        print("exporting mesh at frame {frame}")
+        gaussExtractor.reconstruction(scene.test_dataset, 0, frame)
+        # extract the mesh and save
+
+        name = f"{frame}.ply"
+        mesh = gaussExtractor.extract_mesh_bounded(voxel_size=voxel_size, sdf_trunc=sdf_trunc, depth_trunc=depth_trunc,
+                                                   reconstruct_frame=frame)
+
+        # o3d.io.write_triangle_mesh(os.path.join(reconstruct_dir, name), mesh)
+        # print("mesh saved at {}".format(os.path.join(reconstruct_dir, name)))
+        # post-process the mesh and save, saving the largest N clusters
+        mesh_post = post_process_mesh(mesh, cluster_to_keep=pipe.num_cluster)
+        o3d.io.write_triangle_mesh(os.path.join(reconstruct_dir, name.replace('.ply', '_post.ply')), mesh_post)
+        print("mesh post processed saved at {}".format(os.path.join(reconstruct_dir, name.replace('.ply', '_post.ply'))))
 
 
 @hydra.main(version_base=None, config_path="configs", config_name="config")

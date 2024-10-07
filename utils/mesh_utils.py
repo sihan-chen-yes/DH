@@ -93,39 +93,40 @@ class GaussianExtractor(object):
         self.viewpoint_stack = []
 
     @torch.no_grad()
-    def reconstruction(self, viewpoint_stack, iteration):
+    def reconstruction(self, viewpoint_stack, iteration, reconstruct_frame):
         """
         reconstruct radiance field given cameras
         """
         self.clean()
         self.viewpoint_stack = viewpoint_stack
         for i, viewpoint_cam in tqdm(enumerate(self.viewpoint_stack), desc="reconstruct radiance fields"):
-            render_pkg = self.render(viewpoint_cam, iteration, self.scene)
-            rgb = render_pkg['render']
-            alpha = render_pkg['rend_alpha']
-            normal = torch.nn.functional.normalize(render_pkg['rend_normal'], dim=0)
-            depth = render_pkg['surf_depth']
-            depth_normal = render_pkg['surf_normal']
-            self.rgbmaps.append(rgb.cpu())
-            self.depthmaps.append(depth.cpu())
-            self.alphamaps.append(alpha.cpu())
-            self.normals.append(normal.cpu())
-            self.depth_normals.append(depth_normal.cpu())
+            # pick the view corresponding frame
+            if viewpoint_cam.data['frame_id'] == reconstruct_frame:
+                render_pkg = self.render(viewpoint_cam, iteration, self.scene)
+                rgb = render_pkg['render']
+                alpha = render_pkg['rend_alpha']
+                normal = torch.nn.functional.normalize(render_pkg['rend_normal'], dim=0)
+                depth = render_pkg['surf_depth']
+                depth_normal = render_pkg['surf_normal']
+                self.rgbmaps.append(rgb.cpu())
+                self.depthmaps.append(depth.cpu())
+                self.alphamaps.append(alpha.cpu())
+                self.normals.append(normal.cpu())
+                self.depth_normals.append(depth_normal.cpu())
 
         self.rgbmaps = torch.stack(self.rgbmaps, dim=0)
         self.depthmaps = torch.stack(self.depthmaps, dim=0)
         self.alphamaps = torch.stack(self.alphamaps, dim=0)
         self.depth_normals = torch.stack(self.depth_normals, dim=0)
-        self.estimate_bounding_sphere()
 
-    def estimate_bounding_sphere(self):
+    def estimate_bounding_sphere(self, viewpoint_stack):
         """
         Estimate the bounding sphere given camera pose
         """
         from utils.render_utils import transform_poses_pca, focus_point_fn
         torch.cuda.empty_cache()
         c2ws = np.array(
-            [np.linalg.inv(np.asarray((cam.world_view_transform.T).cpu().numpy())) for cam in self.viewpoint_stack])
+            [np.linalg.inv(np.asarray((cam.world_view_transform.T).cpu().numpy())) for cam in viewpoint_stack])
         poses = c2ws[:, :3, :] @ np.diag([1, -1, -1, 1])
         center = (focus_point_fn(poses))
         self.radius = np.linalg.norm(c2ws[:, :3, 3] - center, axis=-1).min()
@@ -134,7 +135,7 @@ class GaussianExtractor(object):
         print(f"Use at least {2.0 * self.radius:.2f} for depth_trunc")
 
     @torch.no_grad()
-    def extract_mesh_bounded(self, voxel_size=0.004, sdf_trunc=0.02, depth_trunc=3, mask_backgrond=True):
+    def extract_mesh_bounded(self, voxel_size=0.004, sdf_trunc=0.02, depth_trunc=3, mask_backgrond=True, reconstruct_frame=0):
         """
         Perform TSDF fusion given a fixed depth range, used in the paper.
 
@@ -156,23 +157,26 @@ class GaussianExtractor(object):
             color_type=o3d.pipelines.integration.TSDFVolumeColorType.RGB8
         )
 
-        for i, cam_o3d in tqdm(enumerate(to_cam_open3d(self.viewpoint_stack)), desc="TSDF integration progress"):
-            rgb = self.rgbmaps[i]
-            depth = self.depthmaps[i]
+        cam_o3ds = to_cam_open3d(self.viewpoint_stack)
+        cnt = 0
+        for i, view in tqdm(enumerate(self.viewpoint_stack), desc="TSDF integration progress"):
+            if view.data['frame_id'] == reconstruct_frame:
+                rgb = self.rgbmaps[cnt]
+                depth = self.depthmaps[cnt]
+                cnt += 1
+                # if we have mask provided, use it
+                if mask_backgrond and (self.viewpoint_stack[i].gt_alpha_mask is not None):
+                    depth[(self.viewpoint_stack[i].gt_alpha_mask < 0.5)] = 0
 
-            # if we have mask provided, use it
-            if mask_backgrond and (self.viewpoint_stack[i].gt_alpha_mask is not None):
-                depth[(self.viewpoint_stack[i].gt_alpha_mask < 0.5)] = 0
+                # make open3d rgbd
+                rgbd = o3d.geometry.RGBDImage.create_from_color_and_depth(
+                    o3d.geometry.Image(np.asarray(rgb.permute(1, 2, 0).cpu().numpy() * 255, order="C", dtype=np.uint8)),
+                    o3d.geometry.Image(np.asarray(depth.permute(1, 2, 0).cpu().numpy(), order="C")),
+                    depth_trunc=depth_trunc, convert_rgb_to_intensity=False,
+                    depth_scale=1.0
+                )
 
-            # make open3d rgbd
-            rgbd = o3d.geometry.RGBDImage.create_from_color_and_depth(
-                o3d.geometry.Image(np.asarray(rgb.permute(1, 2, 0).cpu().numpy() * 255, order="C", dtype=np.uint8)),
-                o3d.geometry.Image(np.asarray(depth.permute(1, 2, 0).cpu().numpy(), order="C")),
-                depth_trunc=depth_trunc, convert_rgb_to_intensity=False,
-                depth_scale=1.0
-            )
-
-            volume.integrate(rgbd, intrinsic=cam_o3d.intrinsic, extrinsic=cam_o3d.extrinsic)
+                volume.integrate(rgbd, intrinsic=cam_o3ds[i].intrinsic, extrinsic=cam_o3ds[i].extrinsic)
 
         mesh = volume.extract_triangle_mesh()
         return mesh

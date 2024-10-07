@@ -15,7 +15,7 @@ import math
 from diff_surfel_rasterization import GaussianRasterizationSettings, GaussianRasterizer
 from utils.sh_utils import eval_sh
 from utils.point_utils import depth_to_normal
-from utils.general_utils import build_rotation
+from utils.general_utils import build_rotation, linear_to_srgb, srgb_to_linear
 
 
 def render(data,
@@ -46,6 +46,7 @@ def render(data,
     tanfovx = math.tan(data.FoVx * 0.5)
     tanfovy = math.tan(data.FoVy * 0.5)
 
+    bg_color = srgb_to_linear(bg_color)
     raster_settings = GaussianRasterizationSettings(
         image_height=int(data.image_height),
         image_width=int(data.image_width),
@@ -117,6 +118,7 @@ def render(data,
         rotations = rotations,
         cov3D_precomp = cov3D_precomp
     )
+    rendered_image = linear_to_srgb(rendered_image)
 
     # additional regularizations
     render_alpha = allmap[1:2]
