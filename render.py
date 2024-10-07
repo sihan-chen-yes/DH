@@ -162,9 +162,13 @@ def test(config):
 
             opacity_image = torch.clamp(render_pkg["opacity_render"], 0.0, 1.0)
 
+            gt_mask = view.data['original_mask']
+
             # 2dgs
             rend_normal_image = render_pkg["rend_normal"]
             rend_normal_image = transform_normals(rend_normal_image, view.world_view_transform.T)
+            # prune rendered normal
+            rend_normal_image = rend_normal_image * gt_mask
 
             rend_dist_image = render_pkg["rend_dist"]
             rend_dist_image = colormap(rend_dist_image.cpu().numpy()[0])
@@ -176,6 +180,8 @@ def test(config):
 
             surf_normal_image = render_pkg["surf_normal"]
             surf_normal_image = transform_normals(surf_normal_image, view.world_view_transform.T)
+            # prune depth normal
+            surf_normal_image = surf_normal_image * gt_mask
 
             gt = view.original_image[:3, :, :]
 
