@@ -43,8 +43,8 @@ dataset:
   resolution: -1
   padding: 0.1
   white_background: false
-  random_background: true
-  foreground_crop: true
+  random_background: false
+  foreground_crop: false
   data_device: cuda
   eval: false
 
