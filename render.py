@@ -282,7 +282,7 @@ def extract_mesh(config):
     sdf_trunc = 5.0 * voxel_size if pipe.sdf_trunc < 0 else pipe.sdf_trunc
 
     for frame in range(reconstruct_frames[0], reconstruct_frames[1], reconstruct_frames[2]):
-        print("exporting mesh at frame {frame}")
+        print(f"exporting mesh at frame {frame}")
         gaussExtractor.reconstruction(scene.test_dataset, 0, frame)
         # extract the mesh and save
 

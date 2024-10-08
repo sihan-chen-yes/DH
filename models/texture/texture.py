@@ -170,6 +170,7 @@ class FusionMLP(ColorPrecompute):
         self.latent_dim = cfg.get('latent_dim', 0)
 
         self.use_ref = cfg.get('use_ref', False)
+        self.use_dir_normal_dot = cfg.get('use_dir_normal_dot', False)
         self.texture_mode = cfg.get('texture_mode', 'fusion')
 
         # if self.use_xyz:
@@ -194,9 +195,10 @@ class FusionMLP(ColorPrecompute):
             d_shading_normal_in += self.latent_dim
             self.frame_dict = metadata['frame_dict']
             self.latent = nn.Embedding(len(self.frame_dict), self.latent_dim)
-
+        if self.use_dir_normal_dot:
+            d_specular_in += 1
         d_color_out = 3
-        d_blending_out = 1
+        d_blending_out = 3
         d_shading_normal_out = 3
         self.diffuse_mlp = VanillaCondMLP(d_diffuse_in, 0, d_color_out, cfg.mlp)
         self.specular_mlp = VanillaCondMLP(d_specular_in, 0, d_color_out, cfg.mlp)
@@ -260,6 +262,11 @@ class FusionMLP(ColorPrecompute):
             dir_pp = (gaussians.get_xyz - camera.camera_center.repeat(n_points, 1))
             # normalize
             dir_pp = dir_pp / (dir_pp.norm(dim=1, keepdim=True) + 1e-12)
+
+            if self.use_dir_normal_dot:
+                dir_normal_dot = torch.bmm(dir_pp.unsqueeze(1), normal.unsqueeze(2)).squeeze(2)
+                specular_features = torch.cat([specular_features, dir_normal_dot], dim=1)
+
             # use reflection direction of view direction w.r.t normal
             if self.use_ref:
                 # incident ray
@@ -326,7 +333,7 @@ class FusionMLP(ColorPrecompute):
             #only specular
             color_precomp = specular_output
         else:
-            color_precomp = (1 - blending_output) * diffuse_output + blending_output * specular_output
+            color_precomp = diffuse_output + blending_output * specular_output
         # change to sRGB space and map to [0, 1]
         shading_normal_offset_loss = torch.norm(shading_normal_offset, p=1, dim=1).mean()
         loss_reg ={
