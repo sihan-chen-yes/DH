@@ -170,6 +170,7 @@ class FusionMLP(ColorPrecompute):
         self.latent_dim = cfg.get('latent_dim', 0)
 
         self.use_ref = cfg.get('use_ref', False)
+        self.texture_mode = cfg.get('texture_mode', 'fusion')
 
         # if self.use_xyz:
         #     d_in += 3
@@ -318,7 +319,14 @@ class FusionMLP(ColorPrecompute):
         specular_output = self.color_activation(self.specular_mlp(specular_features))
         blending_output = self.blending_activation(self.blending_mlp(blending_features))
         # linear composition
-        color_precomp = (1 - blending_output) * diffuse_output + blending_output * specular_output
+        if self.texture_mode == "diffuse":
+            # only diffuse
+            color_precomp = diffuse_output
+        elif self.texture_mode == "specular":
+            #only specular
+            color_precomp = specular_output
+        else:
+            color_precomp = (1 - blending_output) * diffuse_output + blending_output * specular_output
         # change to sRGB space and map to [0, 1]
         shading_normal_offset_loss = torch.norm(shading_normal_offset, p=1, dim=1).mean()
         loss_reg ={

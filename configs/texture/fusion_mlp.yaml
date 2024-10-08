@@ -20,6 +20,8 @@ model:
     cano_view_dir: true
     view_noise: 45
     use_ref: true
+    # diffuse specular fusion
+    texture_mode: fusion
 
     mlp:
       n_neurons: 64
