@@ -212,3 +212,9 @@ def augm_rots(roll_range=90, pitch_range=90, yaw_range=90):
     rot_mat = np.dot(rot_x, np.dot(rot_y, rot_z))
 
     return rot_mat
+
+def RGB2SH(rgb):
+    return (rgb - 0.5) / C0
+
+def SH2RGB(sh):
+    return sh * C0 + 0.5

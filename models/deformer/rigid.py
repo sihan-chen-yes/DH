@@ -51,8 +51,8 @@ class SMPLNN(RigidDeform):
 
         xyz = gaussians.get_xyz
         n_pts = xyz.shape[0]
-        # pts_W = self.query_weights(xyz)
-        pts_W = gaussians.LBS_weight
+        pts_W = self.query_weights(xyz)
+        # pts_W = gaussians.LBS_weight
         T_fwd = torch.matmul(pts_W, bone_transforms.view(-1, 16)).view(n_pts, 4, 4).float()
 
         deformed_gaussians = gaussians.clone()
@@ -65,9 +65,11 @@ class SMPLNN(RigidDeform):
 
         rotation_hat = build_rotation(gaussians._rotation)
         rotation_bar = torch.matmul(T_fwd[:, :3, :3], rotation_hat)
-        setattr(deformed_gaussians, 'rotation_precomp', rotation_bar)
+        # setattr(deformed_gaussians, 'rotation_precomp', rotation_bar)
         # deformed_gaussians._rotation = tf.matrix_to_quaternion(rotation_bar)
         # deformed_gaussians._rotation = rotation_matrix_to_quaternion(rotation_bar)
+        from pytorch3d.transforms import matrix_to_quaternion
+        deformed_gaussians._rotation = matrix_to_quaternion(rotation_bar)
 
         return deformed_gaussians
 

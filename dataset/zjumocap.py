@@ -8,6 +8,8 @@ import json
 from utils.dataset_utils import get_02v_bone_transforms, fetchPly, storePly, AABB
 from scene.cameras import Camera
 from utils.camera_utils import freeview_camera
+from utils.graphics_utils import MeshPointCloud
+from utils.sh_utils import SH2RGB
 
 
 import torch
@@ -422,19 +424,66 @@ class ZJUMoCapDataset(Dataset):
 
             pcd = fetchPly(ply_path)
         else:
-            ply_path = os.path.join(self.root_dir, self.subject, 'cano_smpl.ply')
-            try:
-                pcd = fetchPly(ply_path)
-            except:
-                verts = self.metadata['smpl_verts']
-                faces = self.faces
-                mesh = trimesh.Trimesh(vertices=verts, faces=faces)
-                n_points = 100_000
+            # ply_path = os.path.join(self.root_dir, self.subject, 'cano_smpl.ply')
+            mesh = self.metadata['cano_mesh']
+            vertices = mesh.vertices
 
-                xyz = mesh.sample(n_points)
-                rgb = np.ones_like(xyz) * 255
-                storePly(ply_path, xyz, rgb)
+            def transform_vertices_function(vertices, c=1):
+                # vertices = vertices[:, [0, 2, 1]]
+                # vertices[:, 1] = -vertices[:, 1]
+                vertices *= c
+                return vertices
 
-                pcd = fetchPly(ply_path)
+            # vertices = transform_vertices_function(
+            #     torch.tensor(vertices),
+            # )
+            vertices = torch.tensor(vertices)
+            faces = mesh.faces
+            triangles = vertices[torch.tensor(mesh.faces).long()].float()
+
+            num_pts_each_triangle = self.cfg.num_splats
+            num_pts = num_pts_each_triangle * triangles.shape[0]
+
+            print(
+                f"Generating random point cloud ({num_pts})..."
+            )
+
+            # We create random points inside the bounds traingles
+            alpha = torch.rand(
+                triangles.shape[0],
+                num_pts_each_triangle,
+                3
+            )
+
+            xyz = torch.matmul(
+                alpha,
+                triangles
+            )
+            xyz = xyz.reshape(num_pts, 3)
+
+            shs = np.random.random((num_pts, 3)) / 255.0
+
+            pcd = MeshPointCloud(
+                alpha=alpha,
+                points=xyz,
+                colors=SH2RGB(shs),
+                normals=np.zeros((num_pts, 3)),
+                vertices=vertices,
+                faces=faces,
+                transform_vertices_function=transform_vertices_function,
+                triangles=triangles.cuda()
+            )
+
+            # except:
+            #     verts = self.metadata['smpl_verts']
+            #     faces = self.faces
+            #     mesh = trimesh.Trimesh(vertices=verts, faces=faces)
+            #     n_points = 100_000
+            #
+            #     xyz = mesh.sample(n_points)
+            #     rgb = np.ones_like(xyz) * 255
+            #     storePly(ply_path, xyz, rgb)
+            #
+            #     pcd = fetchPly(ply_path)
 
         return pcd

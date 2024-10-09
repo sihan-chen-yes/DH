@@ -13,6 +13,7 @@ import os
 import torch
 from models import GaussianConverter
 from scene.gaussian_model import GaussianModel
+from scene.gaussian_mesh_model import GaussianMeshModel
 from dataset import load_dataset
 
 

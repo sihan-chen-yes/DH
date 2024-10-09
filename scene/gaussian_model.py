@@ -76,7 +76,7 @@ class GaussianModel:
 
         properties = ["active_sh_degree",
                       "non_rigid_feature",
-                      "LBS_weight"
+                      # "LBS_weight"
                       ]
         for property in properties:
             if hasattr(self, property):
@@ -176,34 +176,34 @@ class GaussianModel:
         loss_opacity_cls = -(opacity * torch.log(opacity + eps) + (1 - opacity) * torch.log(1 - opacity + eps)).mean()
         return {'opacity': loss_opacity_cls}
 
-    def create_from_pcd(self, pcd : BasicPointCloud, spatial_lr_scale=1.):
-        self.spatial_lr_scale = spatial_lr_scale
-        fused_point_cloud = torch.tensor(np.asarray(pcd.points)).float().cuda()
-        fused_color = RGB2SH(torch.tensor(np.asarray(pcd.colors)).float().cuda())
-
-        if self.use_sh:
-            features = torch.zeros((fused_color.shape[0], 3, (self.max_sh_degree + 1) ** 2)).float().cuda()
-            features[:, :3, 0 ] = fused_color
-            features[:, 3:, 1:] = 0.0
-        else:
-            features = torch.zeros((fused_color.shape[0], 1, self.feature_dim)).float().cuda()
-
-        print("Number of points at initialisation : ", fused_point_cloud.shape[0])
-
-        dist2 = torch.clamp_min(distCUDA2(torch.from_numpy(np.asarray(pcd.points)).float().cuda()), 0.0000001)
-        scales = torch.log(torch.sqrt(dist2))[...,None].repeat(1, 3)
-        rots = torch.zeros((fused_point_cloud.shape[0], 4), device="cuda")
-        rots[:, 0] = 1
-
-        opacities = inverse_sigmoid(0.1 * torch.ones((fused_point_cloud.shape[0], 1), dtype=torch.float, device="cuda"))
-
-        self._xyz = nn.Parameter(fused_point_cloud.requires_grad_(True))
-        self._features_dc = nn.Parameter(features[:,:,0:1].transpose(1, 2).contiguous().requires_grad_(True))
-        self._features_rest = nn.Parameter(features[:,:,1:].transpose(1, 2).contiguous().requires_grad_(True))
-        self._scaling = nn.Parameter(scales.requires_grad_(True))
-        self._rotation = nn.Parameter(rots.requires_grad_(True))
-        self._opacity = nn.Parameter(opacities.requires_grad_(True))
-        self.max_radii2D = torch.zeros((self.get_xyz.shape[0]), device="cuda")
+    # def create_from_pcd(self, pcd : BasicPointCloud, spatial_lr_scale=1.):
+    #     self.spatial_lr_scale = spatial_lr_scale
+    #     fused_point_cloud = torch.tensor(np.asarray(pcd.points)).float().cuda()
+    #     fused_color = RGB2SH(torch.tensor(np.asarray(pcd.colors)).float().cuda())
+    #
+    #     if self.use_sh:
+    #         features = torch.zeros((fused_color.shape[0], 3, (self.max_sh_degree + 1) ** 2)).float().cuda()
+    #         features[:, :3, 0 ] = fused_color
+    #         features[:, 3:, 1:] = 0.0
+    #     else:
+    #         features = torch.zeros((fused_color.shape[0], 1, self.feature_dim)).float().cuda()
+    #
+    #     print("Number of points at initialisation : ", fused_point_cloud.shape[0])
+    #
+    #     dist2 = torch.clamp_min(distCUDA2(torch.from_numpy(np.asarray(pcd.points)).float().cuda()), 0.0000001)
+    #     scales = torch.log(torch.sqrt(dist2))[...,None].repeat(1, 3)
+    #     rots = torch.zeros((fused_point_cloud.shape[0], 4), device="cuda")
+    #     rots[:, 0] = 1
+    #
+    #     opacities = inverse_sigmoid(0.1 * torch.ones((fused_point_cloud.shape[0], 1), dtype=torch.float, device="cuda"))
+    #
+    #     self._xyz = nn.Parameter(fused_point_cloud.requires_grad_(True))
+    #     self._features_dc = nn.Parameter(features[:,:,0:1].transpose(1, 2).contiguous().requires_grad_(True))
+    #     self._features_rest = nn.Parameter(features[:,:,1:].transpose(1, 2).contiguous().requires_grad_(True))
+    #     self._scaling = nn.Parameter(scales.requires_grad_(True))
+    #     self._rotation = nn.Parameter(rots.requires_grad_(True))
+    #     self._opacity = nn.Parameter(opacities.requires_grad_(True))
+    #     self.max_radii2D = torch.zeros((self.get_xyz.shape[0]), device="cuda")
 
     def training_setup(self, training_args):
         self.percent_dense = training_args.percent_dense

@@ -75,3 +75,13 @@ def fov2focal(fov, pixels):
 
 def focal2fov(focal, pixels):
     return 2*math.atan(pixels/(2*focal))
+
+class MeshPointCloud(NamedTuple):
+    alpha: torch.Tensor
+    points: torch.Tensor
+    colors: np.array
+    normals: np.array
+    vertices: np.array
+    faces: np.array
+    transform_vertices_function: object
+    triangles: torch.Tensor

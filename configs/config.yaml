@@ -47,6 +47,8 @@ dataset:
   data_device: cuda
   eval: false
 
+  num_splats: 10
+
 opt:
   iterations: 60000
   grad_clip: 0.1
@@ -60,6 +62,10 @@ opt:
   opacity_lr: 0.05
   scaling_lr: 0.005
   rotation_lr: 0.001
+
+  #GaMeS
+  vertices_lr: 0.0
+  alpha_lr: 0.001
 
   pose_correction_lr: 1e-4
   rigid_lr: 1e-4

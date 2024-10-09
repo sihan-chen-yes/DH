@@ -17,7 +17,7 @@ import torch.nn.functional as F
 from random import randint
 from utils.loss_utils import l1_loss, ssim
 from gaussian_renderer import render
-from scene import Scene, GaussianModel
+from scene import Scene, GaussianModel, GaussianMeshModel
 from utils.general_utils import fix_random, Evaluator, PSEvaluator
 from tqdm import tqdm
 from utils.loss_utils import full_aiap_loss
@@ -65,7 +65,8 @@ def training(config):
     evaluator = PSEvaluator() if dataset.name == 'people_snapshot' else Evaluator()
 
     first_iter = 0
-    gaussians = GaussianModel(model.gaussian)
+    gaussians = GaussianMeshModel(model.gaussian)
+
     scene = Scene(config, gaussians, config.exp_dir)
     scene.train()
 
@@ -84,6 +85,11 @@ def training(config):
     progress_bar = tqdm(range(first_iter, opt.iterations), desc="Training progress")
     first_iter += 1
     for iteration in range(first_iter, opt.iterations + 1):
+
+        if hasattr(gaussians, 'update_alpha'):
+            gaussians.update_alpha()
+        if hasattr(gaussians, 'prepare_scaling_rot'):
+            gaussians.prepare_scaling_rot()
 
         iter_start.record()
 
@@ -215,18 +221,18 @@ def training(config):
                 print("\n[ITER {}] Saving Gaussians".format(iteration))
                 scene.save(iteration)
 
-            # Densification
-            if iteration < opt.densify_until_iter and iteration > model.gaussian.delay:
-                # Keep track of max radii in image-space for pruning
-                gaussians.max_radii2D[visibility_filter] = torch.max(gaussians.max_radii2D[visibility_filter], radii[visibility_filter])
-                gaussians.add_densification_stats(viewspace_point_tensor, visibility_filter)
-
-                if iteration > opt.densify_from_iter and iteration % opt.densification_interval == 0:
-                    size_threshold = 20 if iteration > opt.opacity_reset_interval else None
-                    gaussians.densify_and_prune(opt, scene, size_threshold)
-                
-                if iteration % opt.opacity_reset_interval == 0 or (dataset.white_background and iteration == opt.densify_from_iter):
-                    gaussians.reset_opacity()
+            # # Densification
+            # if iteration < opt.densify_until_iter and iteration > model.gaussian.delay:
+            #     # Keep track of max radii in image-space for pruning
+            #     gaussians.max_radii2D[visibility_filter] = torch.max(gaussians.max_radii2D[visibility_filter], radii[visibility_filter])
+            #     gaussians.add_densification_stats(viewspace_point_tensor, visibility_filter)
+            #
+            #     if iteration > opt.densify_from_iter and iteration % opt.densification_interval == 0:
+            #         size_threshold = 20 if iteration > opt.opacity_reset_interval else None
+            #         gaussians.densify_and_prune(opt, scene, size_threshold)
+            #
+            #     if iteration % opt.opacity_reset_interval == 0 or (dataset.white_background and iteration == opt.densify_from_iter):
+            #         gaussians.reset_opacity()
 
             # Optimizer step
             if iteration < opt.iterations:
@@ -234,6 +240,8 @@ def training(config):
 
             if iteration in checkpoint_iterations:
                 scene.save_checkpoint(iteration)
+
+
 
 def validation(iteration, testing_iterations, testing_interval, scene : Scene, evaluator, renderArgs):
     # Report test and samples of training set

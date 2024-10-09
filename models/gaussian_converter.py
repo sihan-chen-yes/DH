@@ -51,11 +51,11 @@ class GaussianConverter(nn.Module):
             camera = camera.copy()
             camera.rots = camera.rots + torch.randn(camera.rots.shape, device=camera.rots.device) * pose_noise
 
-        interpolated_gaussians, loss_reg_interpolater = self.interpolater(gaussians, camera, compute_loss)
-        deformed_gaussians, loss_reg_deformer = self.deformer(interpolated_gaussians, camera, iteration, compute_loss)
+        # interpolated_gaussians, loss_reg_interpolater = self.interpolater(gaussians, camera, compute_loss)
+        deformed_gaussians, loss_reg_deformer = self.deformer(gaussians, camera, iteration, compute_loss)
 
         loss_reg.update(loss_reg_pose)
-        loss_reg.update(loss_reg_interpolater)
+        # loss_reg.update(loss_reg_interpolater)
         loss_reg.update(loss_reg_deformer)
 
         color_precompute = self.texture(deformed_gaussians, camera)
