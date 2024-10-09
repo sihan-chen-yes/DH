@@ -24,7 +24,7 @@ from utils.loss_utils import full_aiap_loss
 from utils.general_utils import colormap, transform_normals, get_boundary_mask
 from utils.mesh_utils import GaussianExtractor, to_cam_open3d, post_process_mesh
 import open3d as o3d
-
+import math
 import hydra
 from omegaconf import OmegaConf
 import wandb
@@ -48,6 +48,47 @@ def C(iteration, value):
                 break
         value = value_list[i - 1]
     return value
+
+def get_lambda(opt, name, iteration):
+    lbd = opt.get(f"lambda_{name}", 0.)
+
+    loss_from_dict = {
+        "normal": opt.normal_loss_from,
+        "dist": opt.dist_loss_from,
+        "opacity_constraint": opt.opacity_constraint_loss_from,
+
+    }
+
+    loss_until_dict = {
+
+
+    }
+
+    # constrain lbd via from_iteration and until_iteration
+    if name in loss_from_dict.keys() and name not in loss_until_dict.keys():
+        # fixed lambda
+        loss_from_iteration = loss_from_dict[name]
+        lbd = 0.0 if iteration < loss_from_iteration else lbd
+    elif name in loss_until_dict.keys() and name not in loss_from_dict.keys():
+        # fixed lambda
+        loss_until_iteration = loss_until_dict[name]
+        lbd = 0.0 if iteration >= loss_until_iteration else lbd
+    elif name in loss_from_dict.keys() and name in loss_until_dict.keys():
+        loss_from_iteration = loss_from_dict[name]
+        loss_until_iteration = loss_until_dict[name]
+        method = opt.opt.get("decay_method", "linear")
+        # lambda decay as linear
+        if method == "linear":
+            lbd = lbd * ((loss_until_iteration - iteration) / (loss_until_iteration - loss_from_iteration))
+        # lambda decay as exponential
+        elif method == "exponential":
+            lbd = lbd * math.exp(-(iteration - loss_from_iteration))
+        # lambda decay as cosine
+        elif method == "cosine":
+            lbd = lbd * 0.5 * (1 + math.cos(math.pi * (iteration - loss_from_iteration) / (loss_until_iteration - loss_from_iteration)))
+
+    return lbd
+
 
 def training(config):
     model = config.model
@@ -200,10 +241,10 @@ def training(config):
         loss += lambda_aiap_cov * loss_aiap_cov
 
         # 2dgs regularization
-        lambda_normal = config.opt.lambda_normal if iteration > config.opt.normal_loss_from else 0.0
-        lambda_dist = config.opt.lambda_dist if iteration > config.opt.dist_loss_from else 0.0
+        lambda_normal = get_lambda(opt, "normal", iteration)
+        lambda_dist = get_lambda(opt, "dist", iteration)
         #TODO
-        lambda_dir_normal_constraint = config.opt.lambda_dir_normal_constraint
+        lambda_dir_normal_constraint = get_lambda(opt, "dir_normal_constraint", iteration)
 
         # mask, only care foreground
         normal_error = (1 - (rend_normal * surf_normal).sum(dim=0))[None]
@@ -221,7 +262,7 @@ def training(config):
         # regularization
         loss_reg = render_pkg["loss_reg"]
         for name, value in loss_reg.items():
-            lbd = opt.get(f"lambda_{name}", 0.)
+            lbd = get_lambda(opt, name, iteration)
             lbd = C(iteration, lbd)
             loss += lbd * value
         loss.backward()

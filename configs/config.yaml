@@ -69,6 +69,8 @@ opt:
 
   # loss weights
   #TODO
+  # lambda decay methods: linear, exponential, cosine
+  decay_method: cosine
   lambda_l1: 0.8
   lambda_dssim: 0.2
   lambda_perceptual: 0.01
@@ -92,7 +94,10 @@ opt:
   lambda_dir_normal_constraint: 0.1
   cano_space_transformation: true
   # TODO
-  lambda_shading_normal_offset_loss: 0.01
+  lambda_shading_normal_offset: 0.01
+
+  lambda_opacity_constraint: 0.1
+  opacity_constraint_loss_from: 15000
 
   # densification configs
   percent_dense: 0.01

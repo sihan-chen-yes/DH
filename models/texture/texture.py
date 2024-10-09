@@ -144,7 +144,10 @@ class ColorMLP(ColorPrecompute):
         inp = self.compose_input(gaussians, camera)
         output = self.mlp(inp)
         color = self.color_activation(output)
-        return color
+        loss_reg ={
+
+        }
+        return color, loss_reg
 
 class FusionMLP(ColorPrecompute):
     '''
@@ -336,8 +339,15 @@ class FusionMLP(ColorPrecompute):
             color_precomp = diffuse_output + blending_output * specular_output
         # change to sRGB space and map to [0, 1]
         shading_normal_offset_loss = torch.norm(shading_normal_offset, p=1, dim=1).mean()
+
+        # epsilon = 1e-6
+        # opacity = torch.clamp(gaussians.get_opacity, epsilon, 1 - epsilon)
+        # opacity_constraint = torch.mean(torch.log(opacity) + torch.log(1 - opacity))
+        opacity_constraint = torch.mean(gaussians.get_opacity ** 2 + (1 - gaussians.get_opacity) ** 2)
+
         loss_reg ={
-            "shading_normal_offset_loss": shading_normal_offset_loss
+            "shading_normal_offset": shading_normal_offset_loss,
+            "opacity_constraint": opacity_constraint
         }
         return color_precomp, loss_reg
 
