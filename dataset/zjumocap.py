@@ -10,7 +10,7 @@ from scene.cameras import Camera
 from utils.camera_utils import freeview_camera
 from utils.graphics_utils import MeshPointCloud
 from utils.sh_utils import SH2RGB
-
+from utils.general_utils import transform_vertices_function
 
 import torch
 from torch.utils.data import Dataset
@@ -428,15 +428,6 @@ class ZJUMoCapDataset(Dataset):
             mesh = self.metadata['cano_mesh']
             vertices = mesh.vertices
 
-            def transform_vertices_function(vertices, c=1):
-                # vertices = vertices[:, [0, 2, 1]]
-                # vertices[:, 1] = -vertices[:, 1]
-                vertices *= c
-                return vertices
-
-            # vertices = transform_vertices_function(
-            #     torch.tensor(vertices),
-            # )
             vertices = torch.tensor(vertices)
             faces = mesh.faces
             triangles = vertices[torch.tensor(mesh.faces).long()].float()

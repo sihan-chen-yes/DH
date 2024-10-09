@@ -18,7 +18,7 @@ from os import makedirs
 from gaussian_renderer import render
 import torchvision
 from utils.general_utils import fix_random
-from scene import GaussianModel
+from scene import GaussianModel, GaussianMeshModel
 
 from utils.general_utils import Evaluator, PSEvaluator
 from utils.mesh_utils import GaussianExtractor, to_cam_open3d, post_process_mesh
@@ -30,7 +30,7 @@ import wandb
 
 def predict(config):
     with torch.set_grad_enabled(False):
-        gaussians = GaussianModel(config.model.gaussian)
+        gaussians = GaussianMeshModel(config.model.gaussian)
         scene = Scene(config, gaussians, config.exp_dir)
         scene.eval()
         load_ckpt = config.get('load_ckpt', None)
@@ -76,7 +76,7 @@ def predict(config):
 
 def test(config):
     with torch.no_grad():
-        gaussians = GaussianModel(config.model.gaussian)
+        gaussians = GaussianMeshModel(config.model.gaussian)
         scene = Scene(config, gaussians, config.exp_dir)
         scene.eval()
         load_ckpt = config.get('load_ckpt', None)
@@ -166,7 +166,8 @@ def extract_mesh(config):
 
     reconstruct_dir = os.path.join(config.exp_dir, config.suffix)
 
-    gaussians = GaussianModel(config.model.gaussian)
+    gaussians = GaussianMeshModel(config.model.gaussian)
+
     scene = Scene(config, gaussians, config.exp_dir)
     scene.eval()
     load_ckpt = config.get('load_ckpt', None)

@@ -478,3 +478,10 @@ def _sqrt_positive_part(x: torch.Tensor) -> torch.Tensor:
     positive_mask = x > 0
     ret[positive_mask] = torch.sqrt(x[positive_mask])
     return ret
+
+
+def transform_vertices_function(vertices, c=1):
+    # vertices = vertices[:, [0, 2, 1]]
+    # vertices[:, 1] = -vertices[:, 1]
+    vertices *= c
+    return vertices

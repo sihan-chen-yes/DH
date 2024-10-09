@@ -249,6 +249,9 @@ class GaussianModel:
         return l
 
     def save_ply(self, path):
+        self._save_ply(path)
+
+    def _save_ply(self, path):
         os.makedirs(os.path.dirname(path), exist_ok=True)
 
         xyz = self._xyz.detach().cpu().numpy()
@@ -273,6 +276,9 @@ class GaussianModel:
         self._opacity = optimizable_tensors["opacity"]
 
     def load_ply(self, path):
+        self._load_ply(path)
+
+    def _load_ply(self, path):
         plydata = PlyData.read(path)
 
         xyz = np.stack((np.asarray(plydata.elements[0]["x"]),
