@@ -99,7 +99,10 @@ class GaussianExtractor(object):
         """
         self.clean()
         self.viewpoint_stack = viewpoint_stack
+        pc = None
+        frame_id = 0
         for i, viewpoint_cam in tqdm(enumerate(self.viewpoint_stack), desc="reconstruct radiance fields"):
+            frame_id = viewpoint_cam.data['frame_id']
             render_pkg = self.render(viewpoint_cam, iteration, self.scene, return_opacity=True, return_depth=True)
             rgb = render_pkg['render']
             alpha = render_pkg['rend_alpha']
@@ -111,7 +114,10 @@ class GaussianExtractor(object):
             self.alphamaps.append(alpha.cpu())
             # self.normals.append(normal.cpu())
             # self.depth_normals.append(depth_normal.cpu())
-
+            pc, loss_reg, colors_precomp = self.scene.convert_gaussians(viewpoint_cam, iteration, False)
+        point_cloud_path = os.path.join(self.scene.save_dir, "point_cloud/frame_{}".format(frame_id), "point_cloud.ply")
+        pc.save_ply(point_cloud_path)
+        print(f'Ply saved at {point_cloud_path}')
         self.rgbmaps = torch.stack(self.rgbmaps, dim=0)
         self.depthmaps = torch.stack(self.depthmaps, dim=0)
         self.alphamaps = torch.stack(self.alphamaps, dim=0)
