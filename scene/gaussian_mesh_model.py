@@ -56,6 +56,7 @@ class GaussianMeshModel(GaussianModel):
         print("Number of points at initialisation in face: ", pcd_alpha_shape[1])
 
         alpha_point_cloud = pcd.alpha.float().cuda()
+        delta_point_cloud = pcd.delta.float().cuda()
         scale = torch.ones((pcd.points.shape[0], 1)).float().cuda()
 
         print("Number of points at initialisation : ",
@@ -74,6 +75,7 @@ class GaussianMeshModel(GaussianModel):
         self.faces = torch.tensor(self.point_cloud.faces).cuda()
 
         self._alpha = nn.Parameter(alpha_point_cloud.requires_grad_(True))  # check update_alpha
+        self._delta = nn.Parameter(delta_point_cloud.requires_grad_(True))  # check update_alpha
         self.update_alpha()
         self._features_dc = nn.Parameter(features[:, :, 0:1].transpose(1, 2).contiguous().requires_grad_(True))
         self._features_rest = nn.Parameter(features[:, :, 1:].transpose(1, 2).contiguous().requires_grad_(True))
@@ -91,13 +93,24 @@ class GaussianMeshModel(GaussianModel):
         the triangles forming the mesh.
 
         """
+        num_pts = self.alpha.shape[0] * self.alpha.shape[1]
+        num_pts_each_triangle = self.alpha.shape[1]
+
         _xyz = torch.matmul(
             self.alpha,
             self.triangles
         )
+
+        triangles = self.triangles
+        self._normals = torch.linalg.cross(
+            triangles[:, 1] - triangles[:, 0],
+            triangles[:, 2] - triangles[:, 0],
+            dim=1
+        ).unsqueeze(1).repeat(1, num_pts_each_triangle, 1).reshape(num_pts, -1)
+
         self._xyz = _xyz.reshape(
             _xyz.shape[0] * _xyz.shape[1], 3
-        )
+        ) + self._delta * self._normals
 
     def prepare_scaling_rot(self, eps=1e-8):
         """
@@ -148,7 +161,7 @@ class GaussianMeshModel(GaussianModel):
         rotation = torch.stack((v0, v1, v2), dim=1).unsqueeze(dim=1)
         rotation = rotation.broadcast_to((*self.alpha.shape[:2], 3, 3)).flatten(start_dim=0, end_dim=1)
         #TODO GS CUDA historical reason?
-        rotation = rotation.transpose(-2, -1)
+        # rotation = rotation.transpose(-2, -1)
         self._rotation = rot_to_quat_batch(rotation)
 
     def update_alpha(self):
@@ -175,6 +188,7 @@ class GaussianMeshModel(GaussianModel):
         l_params = [
             {'params': [self.vertices], 'lr': training_args.vertices_lr, "name": "vertices"},
             {'params': [self._alpha], 'lr': training_args.alpha_lr, "name": "alpha"},
+            {'params': [self._delta], 'lr': training_args.delta_lr, "name": "delta"},
             {'params': [self._features_dc], 'lr': training_args.feature_lr, "name": "f_dc"},
             {'params': [self._features_rest], 'lr': training_args.feature_lr / 20.0, "name": "f_rest"},
             {'params': [self._opacity], 'lr': training_args.opacity_lr, "name": "opacity"},

@@ -66,6 +66,7 @@ opt:
   #GaMeS
   vertices_lr: 0.0
   alpha_lr: 0.001
+  delta_lr: 0.001
 
   pose_correction_lr: 1e-4
   rigid_lr: 1e-4

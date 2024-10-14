@@ -78,6 +78,7 @@ def focal2fov(focal, pixels):
 
 class MeshPointCloud(NamedTuple):
     alpha: torch.Tensor
+    delta: torch.Tensor
     points: torch.Tensor
     colors: np.array
     normals: np.array

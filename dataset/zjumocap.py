@@ -445,6 +445,11 @@ class ZJUMoCapDataset(Dataset):
                 num_pts_each_triangle,
                 3
             )
+            # normal direction offset [-1, 1]
+            delta = 2 * torch.rand(
+                num_pts,
+                1
+            ) - 1
 
             xyz = torch.matmul(
                 alpha,
@@ -456,6 +461,7 @@ class ZJUMoCapDataset(Dataset):
 
             pcd = MeshPointCloud(
                 alpha=alpha,
+                delta=delta,
                 points=xyz,
                 colors=SH2RGB(shs),
                 normals=np.zeros((num_pts, 3)),
