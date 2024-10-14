@@ -77,8 +77,8 @@ def storePly(path, xyz, rgb):
 class AABB(torch.nn.Module):
     def __init__(self, coord_max, coord_min):
         super().__init__()
-        self.register_buffer("coord_max", torch.from_numpy(coord_max).float())
-        self.register_buffer("coord_min", torch.from_numpy(coord_min).float())
+        self.register_buffer("coord_max", torch.from_numpy(coord_max).float().cuda())
+        self.register_buffer("coord_min", torch.from_numpy(coord_min).float().cuda())
 
     def normalize(self, x, sym=False):
         x = (x - self.coord_min) / (self.coord_max - self.coord_min)

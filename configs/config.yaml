@@ -96,7 +96,7 @@ opt:
   # TODO
   lambda_shading_normal_offset: 0.01
 
-  lambda_opacity_constraint: 0.1
+  lambda_opacity_constraint: 0.0
   opacity_constraint_loss_from: 15000
 
   # densification configs

@@ -10,7 +10,7 @@ model:
     name: fusion_mlp
 
     feature_dim: ${model.gaussian.feature_dim}
-#    use_xyz: false
+    use_xyz: true
 #    use_cov: false
 #    use_normal: false
     sh_degree: 3
@@ -30,6 +30,12 @@ model:
       skip_in: []
       cond_in: []
       multires: 0
+
+    #TODO
+    bottleneck_feature_dim: 256
+    roughness_bias: 1.0
+    ide:
+      degree: 5
 
 opt:
   feature_lr: 1e-3
