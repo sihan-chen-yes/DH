@@ -16,10 +16,14 @@ def poisson_reconstruction(path):
     # MeshLab
     ms = pymeshlab.MeshSet()
     print("loading mesh...")
+    ply_path = os.path.join(path, "point_cloud.ply")
     ms.load_new_mesh(os.path.join(path, "point_cloud.ply"))
-
-    print("estimating normal...")
-    ms.compute_normal_for_point_clouds()
+    print(f"loaded mesh at {ply_path}")
+    if ms.current_mesh().vertex_normal_matrix() is not None:
+        print("Normals already exist.")
+    else:
+        print("No normals found. Estimating normals...")
+        ms.compute_normal_for_point_clouds()
 
     print("Poisson reconstructing...")
     ms.generate_surface_reconstruction_screened_poisson(

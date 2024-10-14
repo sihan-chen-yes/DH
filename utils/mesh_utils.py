@@ -102,6 +102,10 @@ class GaussianExtractor(object):
         pc = None
         frame_id = 0
         for i, viewpoint_cam in tqdm(enumerate(self.viewpoint_stack), desc="reconstruct radiance fields"):
+            if hasattr(self.gaussians, 'update_alpha'):
+                self.gaussians.update_alpha()
+            if hasattr(self.gaussians, 'prepare_scaling_rot'):
+                self.gaussians.prepare_scaling_rot()
             frame_id = viewpoint_cam.data['frame_id']
             render_pkg = self.render(viewpoint_cam, iteration, self.scene, return_opacity=True, return_depth=True)
             rgb = render_pkg['render']

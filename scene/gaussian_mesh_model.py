@@ -20,6 +20,8 @@ from scene.gaussian_model import GaussianModel
 from utils.general_utils import inverse_sigmoid, rot_to_quat_batch
 from utils.sh_utils import RGB2SH
 from utils.graphics_utils import MeshPointCloud
+from plyfile import PlyData, PlyElement
+import os
 
 
 class GaussianMeshModel(GaussianModel):
@@ -202,11 +204,28 @@ class GaussianMeshModel(GaussianModel):
         pass
 
     def save_ply(self, path):
-        self._save_ply(path)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+
+        xyz = self._xyz.detach().cpu().numpy()
+        normals = self._normals.detach().cpu().numpy()
+        f_dc = self._features_dc.detach().transpose(1, 2).flatten(start_dim=1).contiguous().cpu().numpy()
+        f_rest = self._features_rest.detach().transpose(1, 2).flatten(start_dim=1).contiguous().cpu().numpy()
+        opacities = self._opacity.detach().cpu().numpy()
+        scale = self._scaling.detach().cpu().numpy()
+        rotation = self._rotation.detach().cpu().numpy()
+
+        dtype_full = [(attribute, 'f4') for attribute in self.construct_list_of_attributes()]
+
+        elements = np.empty(xyz.shape[0], dtype=dtype_full)
+        attributes = np.concatenate((xyz, normals, f_dc, f_rest, opacities, scale, rotation), axis=1)
+        elements[:] = list(map(tuple, attributes))
+        el = PlyElement.describe(elements, 'vertex')
+        PlyData([el]).write(path)
 
         attrs = self.__dict__
         additional_attrs = [
             '_alpha',
+            '_delta',
             '_scale',
             'point_cloud',
             'triangles',
@@ -288,13 +307,15 @@ class GaussianMeshModel(GaussianModel):
 
         parameters = [
                       "_xyz",
+                      "_normals",
                       "_features_dc",
                       "_features_rest",
                       "_scaling",
                       "_rotation",
                       "_opacity",
                       "_alpha",
-                      "_scale"
+                      "_scale",
+                      "_delta"
                       ]
         for parameter in parameters:
             setattr(cloned, parameter, getattr(self, parameter) + 0.)
