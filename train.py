@@ -271,6 +271,9 @@ def validation(iteration, testing_iterations, testing_interval, scene : Scene, e
                 gt_image = torch.clamp(data.original_image.to("cuda"), 0.0, 1.0)
                 opacity_image = torch.clamp(render_pkg["opacity_render"], 0.0, 1.0)
 
+                rend_normal_image = render_pkg["rend_normal"]
+                rend_normal_image = transform_normals(rend_normal_image, data.world_view_transform.T)
+
                 surf_depth_image = render_pkg["surf_depth"]
                 norm = surf_depth_image.max()
                 surf_depth_image = surf_depth_image / norm
@@ -286,6 +289,10 @@ def validation(iteration, testing_iterations, testing_interval, scene : Scene, e
                 examples.append(wandb_img)
                 wandb_img = wandb.Image(gt_image[None], caption=config['name'] + "_view_{}/ground_truth".format(
                     data.image_name))
+                examples.append(wandb_img)
+
+                wandb_img = wandb.Image(rend_normal_image[None],
+                                        caption=config['name'] + "_view_{}/rend_normal_image".format(data.image_name))
                 examples.append(wandb_img)
 
                 wandb_img = wandb.Image(surf_depth_image[None], caption=config['name'] + "_view_{}/surf_depth_image".format(data.image_name))

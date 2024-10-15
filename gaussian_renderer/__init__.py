@@ -13,6 +13,7 @@ import torch
 import math
 from diff_gaussian_rasterization import GaussianRasterizationSettings, GaussianRasterizer
 from utils.point_utils import depth_to_normal
+from utils.general_utils import build_rotation
 
 def render(data,
            iteration,
@@ -23,7 +24,8 @@ def render(data,
            override_color = None,
            compute_loss=True,
            return_opacity=True,
-           return_depth=True):
+           return_depth=True,
+           return_render_normal=True):
     """
     Render the scene. 
     
@@ -126,6 +128,21 @@ def render(data,
         surf_normal = surf_normal.permute(2, 0, 1)
         surf_normal = surf_normal * (render_alpha).detach()
 
+    render_normal = None
+    if return_render_normal:
+        # first column as normal for GaMeS
+        normal = build_rotation(pc.get_rotation)[:, :, 0]
+        render_normal, _ = rasterizer(
+            means3D=means3D,
+            means2D=means2D,
+            shs=None,
+            colors_precomp=normal,
+            opacities=opacity,
+            scales=scales,
+            rotations=rotations,
+            cov3D_precomp=cov3D_precomp)
+        render_normal = (render_normal.permute(1, 2, 0) @ (data.world_view_transform[:3, :3].T)).permute(2, 0, 1)
+
     # Those Gaussians that were frustum culled or had a radius of 0 were not visible.
     # They will be excluded from value updates used in the splitting criteria.
     return {"deformed_gaussian": pc,
@@ -139,4 +156,5 @@ def render(data,
             'rend_alpha': render_alpha,
             "surf_depth": surf_depth,
             'surf_normal': surf_normal,
+            'rend_normal': render_normal,
             }
