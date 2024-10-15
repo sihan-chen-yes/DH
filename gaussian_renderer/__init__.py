@@ -12,6 +12,7 @@
 import torch
 import math
 from diff_gaussian_rasterization import GaussianRasterizationSettings, GaussianRasterizer
+from utils.point_utils import depth_to_normal
 
 def render(data,
            iteration,
@@ -88,9 +89,9 @@ def render(data,
         rotations = rotations,
         cov3D_precomp = cov3D_precomp)
 
-    opacity_image = None
+    render_alpha = None
     if return_opacity:
-        opacity_image, _ = rasterizer(
+        render_alpha, _ = rasterizer(
             means3D=means3D,
             means2D=means2D,
             shs=None,
@@ -99,17 +100,17 @@ def render(data,
             scales=scales,
             rotations=rotations,
             cov3D_precomp=cov3D_precomp)
-        opacity_image = opacity_image[:1]
+        render_alpha = render_alpha[:1]
 
     #expected depth map
-    depth_image = None
+    surf_depth = None
     if return_depth:
         R = torch.from_numpy(data.R).to(device=opacity.device).type_as(means3D)
         T = torch.from_numpy(data.T).to(device=opacity.device).type_as(means3D)
         # points in camera coordinate frame
         points_cam = means3D @ R + T[None, :]
         depths = points_cam[:, 2][:, None].expand(-1, 3)
-        depth_image, _ = rasterizer(
+        surf_depth, _ = rasterizer(
             means3D=means3D,
             means2D=means2D,
             shs=None,
@@ -118,8 +119,12 @@ def render(data,
             scales=scales,
             rotations=rotations,
             cov3D_precomp=cov3D_precomp)
-        depth_image = (depth_image / (opacity_image + 1e-4))
-        depth_image = torch.nan_to_num(depth_image, 0, 0)
+        surf_depth = surf_depth[:1]
+        surf_depth = (surf_depth / (render_alpha + 1e-12))
+        surf_depth = torch.nan_to_num(surf_depth, 0, 0)
+        surf_normal = depth_to_normal(data, surf_depth)
+        surf_normal = surf_normal.permute(2, 0, 1)
+        surf_normal = surf_normal * (render_alpha).detach()
 
     # Those Gaussians that were frustum culled or had a radius of 0 were not visible.
     # They will be excluded from value updates used in the splitting criteria.
@@ -129,8 +134,9 @@ def render(data,
             "visibility_filter" : radii > 0,
             "radii": radii,
             "loss_reg": loss_reg,
-            "opacity_render": opacity_image,
+            "opacity_render": render_alpha,
 
-            'rend_alpha': opacity_image,
-            "surf_depth": depth_image
+            'rend_alpha': render_alpha,
+            "surf_depth": surf_depth,
+            'surf_normal': surf_normal,
             }

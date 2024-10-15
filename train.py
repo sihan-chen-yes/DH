@@ -18,7 +18,7 @@ from random import randint
 from utils.loss_utils import l1_loss, ssim
 from gaussian_renderer import render
 from scene import Scene, GaussianModel, GaussianMeshModel
-from utils.general_utils import fix_random, Evaluator, PSEvaluator
+from utils.general_utils import fix_random, Evaluator, PSEvaluator, transform_normals
 from tqdm import tqdm
 from utils.loss_utils import full_aiap_loss
 from utils.general_utils import colormap
@@ -276,6 +276,9 @@ def validation(iteration, testing_iterations, testing_interval, scene : Scene, e
                 surf_depth_image = surf_depth_image / norm
                 surf_depth_image = colormap(surf_depth_image.cpu().numpy()[0], cmap='turbo')
 
+                surf_normal_image = render_pkg["surf_normal"]
+                surf_normal_image = transform_normals(surf_normal_image, data.world_view_transform.T)
+
                 wandb_img = wandb.Image(opacity_image[None],
                                         caption=config['name'] + "_view_{}/render_opacity".format(data.image_name))
                 examples.append(wandb_img)
@@ -286,6 +289,10 @@ def validation(iteration, testing_iterations, testing_interval, scene : Scene, e
                 examples.append(wandb_img)
 
                 wandb_img = wandb.Image(surf_depth_image[None], caption=config['name'] + "_view_{}/surf_depth_image".format(data.image_name))
+                examples.append(wandb_img)
+
+                wandb_img = wandb.Image(surf_normal_image[None],
+                                        caption=config['name'] + "_view_{}/surf_normal_image".format(data.image_name))
                 examples.append(wandb_img)
 
                 l1_test += l1_loss(image, gt_image).mean().double()

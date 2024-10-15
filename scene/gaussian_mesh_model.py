@@ -267,6 +267,8 @@ class GaussianMeshModel(GaussianModel):
             self._opacity,
             self._alpha,
             self._scale,
+            self._delta,
+            self._normals,
             self.max_radii2D,
             self.xyz_gradient_accum,
             self.denom,
@@ -284,6 +286,8 @@ class GaussianMeshModel(GaussianModel):
          self._opacity,
          self._alpha,
          self._scale,
+         self._delta,
+         self._normals,
          self.max_radii2D,
          xyz_gradient_accum,
          denom,
@@ -307,7 +311,6 @@ class GaussianMeshModel(GaussianModel):
 
         parameters = [
                       "_xyz",
-                      "_normals",
                       "_features_dc",
                       "_features_rest",
                       "_scaling",
@@ -315,7 +318,8 @@ class GaussianMeshModel(GaussianModel):
                       "_opacity",
                       "_alpha",
                       "_scale",
-                      "_delta"
+                      "_normals",
+                      "_delta",
                       ]
         for parameter in parameters:
             setattr(cloned, parameter, getattr(self, parameter) + 0.)
