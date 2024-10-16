@@ -18,6 +18,9 @@ class BasicPointCloud(NamedTuple):
     points : np.array
     colors : np.array
     normals : np.array
+    tangents : np.array
+    bitangents : np.array
+
 
 def geom_transform_points(points, transf_matrix):
     P, _ = points.shape
@@ -75,3 +78,39 @@ def fov2focal(fov, pixels):
 
 def focal2fov(focal, pixels):
     return 2*math.atan(pixels/(2*focal))
+
+def compute_tangent_bitangent(vertices, uvs, faces, normals):
+    tangents = []
+    bitangents = []
+
+    # iterate faces
+    for face in faces:
+        v_indices = face['vertex_indices']
+        uv_indices = face['uv_indices']
+
+        # xyz and uv coords
+        v0, v1, v2 = [vertices[i] for i in v_indices]
+        uv0, uv1, uv2 = [uvs[i] for i in uv_indices]
+
+        delta_pos1 = np.array(v1) - np.array(v0)
+        delta_pos2 = np.array(v2) - np.array(v0)
+        delta_uv1 = np.array(uv1) - np.array(uv0)
+        delta_uv2 = np.array(uv2) - np.array(uv0)
+
+        r = 1.0 / (delta_uv1[0] * delta_uv2[1] - delta_uv1[1] * delta_uv2[0])
+        tangent = r * (delta_pos1 * delta_uv2[1] - delta_pos2 * delta_uv1[1])
+        # bitangent = r * (delta_pos2 * delta_uv1[0] - delta_pos1 * delta_uv2[0])
+
+        normal = np.array(normals[v_indices[0]])
+
+        # Gram-Schmidt orthogonalization
+        tangent = tangent - np.dot(tangent, normal) * normal
+        tangent = tangent / np.linalg.norm(tangent)
+
+        bitangent = np.cross(normal, tangent)
+
+        tangents.append(tangent.tolist())
+        bitangents.append(bitangent.tolist())
+
+    # change list into numpy
+    return np.array(tangents), np.array(bitangents)
