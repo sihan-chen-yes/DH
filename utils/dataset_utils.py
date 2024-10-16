@@ -54,20 +54,41 @@ def fetchPly(path):
     positions = np.vstack([vertices['x'], vertices['y'], vertices['z']]).T
     colors = np.vstack([vertices['red'], vertices['green'], vertices['blue']]).T / 255.0
     normals = np.vstack([vertices['nx'], vertices['ny'], vertices['nz']]).T
-    return BasicPointCloud(points=positions, colors=colors, normals=normals)
+    tangents = np.vstack([vertices['tx'], vertices['ty'], vertices['tz']]).T
+    bitangents = np.vstack([vertices['bx'], vertices['by'], vertices['bz']]).T
 
+    return BasicPointCloud(points=positions, colors=colors, normals=normals, tangents=tangents, bitangents=bitangents)
 
-def storePly(path, xyz, rgb):
+def storePly(path, xyz, rgb, pc_tangents, pc_bitangents, pc_normals):
     # Define the dtype for the structured array
     dtype = [('x', 'f4'), ('y', 'f4'), ('z', 'f4'),
              ('nx', 'f4'), ('ny', 'f4'), ('nz', 'f4'),
+             ('tx', 'f4'), ('ty', 'f4'), ('tz', 'f4'),
+             ('bx', 'f4'), ('by', 'f4'), ('bz', 'f4'),
              ('red', 'u1'), ('green', 'u1'), ('blue', 'u1')]
 
-    normals = np.zeros_like(xyz)
 
     elements = np.empty(xyz.shape[0], dtype=dtype)
-    attributes = np.concatenate((xyz, normals, rgb), axis=1)
-    elements[:] = list(map(tuple, attributes))
+
+    elements['x'] = xyz[:, 0]
+    elements['y'] = xyz[:, 1]
+    elements['z'] = xyz[:, 2]
+
+    elements['nx'] = pc_normals[:, 0]
+    elements['ny'] = pc_normals[:, 1]
+    elements['nz'] = pc_normals[:, 2]
+
+    elements['tx'] = pc_tangents[:, 0]
+    elements['ty'] = pc_tangents[:, 1]
+    elements['tz'] = pc_tangents[:, 2]
+
+    elements['bx'] = pc_bitangents[:, 0]
+    elements['by'] = pc_bitangents[:, 1]
+    elements['bz'] = pc_bitangents[:, 2]
+
+    elements['red'] = rgb[:, 0]
+    elements['green'] = rgb[:, 1]
+    elements['blue'] = rgb[:, 2]
 
     # Create the PlyData object and write to file
     vertex_element = PlyElement.describe(elements, 'vertex')

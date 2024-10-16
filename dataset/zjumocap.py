@@ -2,18 +2,18 @@ import os
 import sys
 import glob
 import cv2
-from utils.graphics_utils import getWorld2View2, focal2fov, fov2focal
+from utils.graphics_utils import getWorld2View2, focal2fov, fov2focal, compute_tangent_bitangent
 import numpy as np
 import json
 from utils.dataset_utils import get_02v_bone_transforms, fetchPly, storePly, AABB
 from scene.cameras import Camera
 from utils.camera_utils import freeview_camera
 
-
 import torch
 from torch.utils.data import Dataset
 from scipy.spatial.transform import Rotation
 import trimesh
+from utils.graphics_utils import BasicPointCloud
 
 class ZJUMoCapDataset(Dataset):
     def __init__(self, cfg, split='train'):
@@ -167,9 +167,9 @@ class ZJUMoCapDataset(Dataset):
         data_path = data_paths[0]
 
         cano_data = self.get_cano_smpl_verts(data_path)
-        if self.split != 'train':
-            self.metadata = cano_data
-            return
+        # if self.split != 'train':
+        #     self.metadata = cano_data
+        #     return
 
         start, end, step = self.train_frames
         frames = list(range(len(data_paths)))
@@ -193,6 +193,47 @@ class ZJUMoCapDataset(Dataset):
         if self.cfg.train_smpl:
             self.metadata.update(self.get_smpl_data())
 
+        # load UV texture data
+        TBN = self.get_TBN()
+        self.metadata.update(TBN)
+
+    def get_TBN(self):
+        subject_dir = os.path.join(self.root_dir, self.subject)
+        obj_file = os.path.join(subject_dir, "smpl_uv.obj")
+
+        # vertices_xyz = []
+        uv_coords = []
+        faces = []
+
+        normals = self.metadata['cano_mesh'].face_normals
+        with open(obj_file, 'r') as obj_file:
+            for line in obj_file:
+                if line.startswith('v '):
+                    continue
+                    # _, x, y, z = line.strip().split()
+                    # vertices_xyz.append([float(x), float(y), float(z)])
+                elif line.startswith('vt '):
+                    _, u, v = line.strip().split()
+                    uv_coords.append([float(u), float(v)])
+                elif line.startswith('f '):
+                    face_elements = line.strip().split()[1:]
+                    vertex_indices = []
+                    uv_indices = []
+                    for element in face_elements:
+                        parts = element.split('/')
+                        vertex_indices.append(int(parts[0]) - 1)
+                        if len(parts) > 1 and parts[1]:
+                            uv_indices.append(int(parts[1]) - 1)
+                    faces.append({'vertex_indices': vertex_indices, 'uv_indices': uv_indices})
+        # use canonical pose xyz coords !
+        vertices_xyz = self.metadata['cano_mesh'].vertices
+        tangents, bitangents = compute_tangent_bitangent(vertices_xyz, uv_coords, faces, normals)
+        uv_data = {
+            "tangents": tangents,
+            "bitangents": bitangents,
+            "normals": normals
+        }
+        return uv_data
 
     def get_cano_smpl_verts(self, data_path):
         '''
@@ -424,17 +465,26 @@ class ZJUMoCapDataset(Dataset):
         else:
             ply_path = os.path.join(self.root_dir, self.subject, 'cano_smpl.ply')
             try:
+                # speed up reading for next time
                 pcd = fetchPly(ply_path)
             except:
                 verts = self.metadata['smpl_verts']
                 faces = self.faces
+                tangents = self.metadata["tangents"]
+                bitangents = self.metadata["bitangents"]
+                normals = self.metadata["normals"]
+
                 mesh = trimesh.Trimesh(vertices=verts, faces=faces)
                 n_points = 50_000
 
-                xyz = mesh.sample(n_points)
+                xyz, face_indices = mesh.sample(n_points, return_index=True)
+                # TODO barycentric interpolation
+                pc_tangents = tangents[face_indices]
+                pc_bitangents = bitangents[face_indices]
+                pc_normals = normals[face_indices]
                 rgb = np.ones_like(xyz) * 255
-                storePly(ply_path, xyz, rgb)
 
+                storePly(ply_path, xyz, rgb, pc_tangents, pc_bitangents, pc_normals)
                 pcd = fetchPly(ply_path)
 
         return pcd

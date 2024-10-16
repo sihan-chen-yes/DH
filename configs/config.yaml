@@ -99,6 +99,7 @@ opt:
   lambda_opacity_constraint: 0.0
   opacity_constraint_loss_from: 15000
 
+  lambda_rot_constraint: 0.1
   # densification configs
   percent_dense: 0.01
   densification_interval: 100
