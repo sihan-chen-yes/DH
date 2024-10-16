@@ -4,6 +4,8 @@ import torch.nn as nn
 from utils.sh_utils import eval_sh, eval_sh_bases, augm_rots
 from utils.general_utils import build_rotation, linear_to_srgb
 from models.network_utils import VanillaCondMLP, IntegratedDirectionalEncoding
+from pytorch3d.transforms import matrix_to_quaternion
+
 
 class ColorPrecompute(nn.Module):
     def __init__(self, cfg, metadata):
@@ -181,6 +183,7 @@ class FusionMLP(ColorPrecompute):
         self.use_ref = cfg.get('use_ref', False)
         self.use_dir_normal_dot = cfg.get('use_dir_normal_dot', False)
         self.texture_mode = cfg.get('texture_mode', 'fusion')
+        self.use_shading_normal_offset = cfg.get('use_shading_normal_offset', False)
 
         if self.use_xyz:
             d_spatial_in += 3
@@ -315,113 +318,6 @@ class FusionMLP(ColorPrecompute):
 
         return directional_features
 
-    # def compose_shading_input(self, gaussians, camera):
-    #     shading_normal_features = gaussians.get_features.squeeze(-1)
-    #     if self.latent_dim > 0:
-    #         frame_idx = camera.frame_id
-    #         if frame_idx not in self.frame_dict:
-    #             latent_idx = len(self.frame_dict) - 1
-    #         else:
-    #             latent_idx = self.frame_dict[frame_idx]
-    #         latent_idx = torch.Tensor([latent_idx]).long().to(shading_normal_features.device)
-    #         latent_code = self.latent(latent_idx)
-    #         latent_code = latent_code.expand(shading_normal_features.shape[0], -1)
-    #         shading_normal_features = torch.cat([shading_normal_features, latent_code], dim=1)
-    #
-    #     normal = self.normal_activation(build_rotation(gaussians.get_rotation)[:, :, -1])
-    #     if self.cano_view_dir:
-    #         T_fwd = gaussians.fwd_transform
-    #         R_bwd = T_fwd[:, :3, :3].transpose(1, 2)
-    #         normal = torch.matmul(R_bwd, normal.unsqueeze(-1)).squeeze(-1)
-    #         # view_noise_scale = self.cfg.get('view_noise', 0.)
-    #         # if self.training and view_noise_scale > 0.:
-    #         #     view_noise = torch.tensor(augm_rots(view_noise_scale, view_noise_scale, view_noise_scale),
-    #         #                               dtype=torch.float32,
-    #         #                               device=normal.device).transpose(0, 1)
-    #         #     normal = torch.matmul(normal, view_noise)
-    #     normal_embed = self.sh_embed(normal)
-    #     shading_normal_features = torch.cat([shading_normal_features, normal_embed], dim=1)
-    #     return shading_normal_features
-    #
-    # def compose_input(self, gaussians, camera, shading_normal_offset=None):
-    #     diffuse_features = gaussians.get_features.squeeze(-1)
-    #     specular_features = torch.empty(0).cuda()
-    #     tint_features = gaussians.get_features.squeeze(-1)
-    #     n_points = diffuse_features.shape[0]
-    #     if shading_normal_offset != None:
-    #         normal = self.normal_activation(build_rotation(gaussians.get_rotation)[:, :, -1] + shading_normal_offset)
-    #     else:
-    #         normal = self.normal_activation(build_rotation(gaussians.get_rotation)[:, :, -1])
-    #     # if self.use_xyz:
-    #     #     aabb = self.metadata["aabb"]
-    #     #     xyz_norm = aabb.normalize(gaussians.get_xyz, sym=True)
-    #     #     features = torch.cat([features, xyz_norm], dim=1)
-    #     # if self.use_cov:
-    #     #     cov = gaussians.get_covariance()
-    #     #     features = torch.cat([features, cov], dim=1)
-    #     # if self.use_normal:
-    #     #     scale = gaussians._scaling
-    #     #     rot = build_rotation(gaussians._rotation)
-    #     #     normal = torch.gather(rot, dim=2, index=scale.argmin(1).reshape(-1, 1, 1).expand(-1, 3, 1)).squeeze(-1)
-    #     #     features = torch.cat([features, normal], dim=1)
-    #     if self.sh_degree > 0:
-    #         dir_pp = (gaussians.get_xyz - camera.camera_center.repeat(n_points, 1))
-    #         # normalize
-    #         dir_pp = dir_pp / (dir_pp.norm(dim=1, keepdim=True) + 1e-12)
-    #
-    #         if self.use_dir_normal_dot:
-    #             dir_normal_dot = torch.bmm(dir_pp.unsqueeze(1), normal.unsqueeze(2)).squeeze(2)
-    #             specular_features = torch.cat([specular_features, dir_normal_dot], dim=1)
-    #
-    #         # use reflection direction of view direction w.r.t normal
-    #         if self.use_ref:
-    #             # incident ray
-    #             w_i = -dir_pp
-    #             # reflection ray, normalized
-    #             w_r = 2 * (torch.bmm(w_i.unsqueeze(1), normal.unsqueeze(2)).squeeze(2)) * normal - w_i
-    #             dir_pp = w_r
-    #         if self.cano_view_dir:
-    #             T_fwd = gaussians.fwd_transform
-    #             R_bwd = T_fwd[:, :3, :3].transpose(1, 2)
-    #             dir_pp = torch.matmul(R_bwd, dir_pp.unsqueeze(-1)).squeeze(-1)
-    #             view_noise_scale = self.cfg.get('view_noise', 0.)
-    #             if self.training and view_noise_scale > 0.:
-    #                 view_noise = torch.tensor(augm_rots(view_noise_scale, view_noise_scale, view_noise_scale),
-    #                                           dtype=torch.float32,
-    #                                           device=dir_pp.device).transpose(0, 1)
-    #                 dir_pp = torch.matmul(dir_pp, view_noise)
-    #         dir_embed = self.sh_embed(dir_pp)
-    #         specular_features = torch.cat([specular_features, dir_embed], dim=1)
-    #     # if self.non_rigid_dim > 0:
-    #     #     assert hasattr(gaussians, "non_rigid_feature")
-    #     #     features = torch.cat([features, gaussians.non_rigid_feature], dim=1)
-    #     if self.latent_dim > 0:
-    #         frame_idx = camera.frame_id
-    #         if frame_idx not in self.frame_dict:
-    #             latent_idx = len(self.frame_dict) - 1
-    #         else:
-    #             latent_idx = self.frame_dict[frame_idx]
-    #         latent_idx = torch.Tensor([latent_idx]).long().to(diffuse_features.device)
-    #         latent_code = self.latent(latent_idx)
-    #         latent_code = latent_code.expand(diffuse_features.shape[0], -1)
-    #         diffuse_features = torch.cat([diffuse_features, latent_code], dim=1)
-    #         specular_features = torch.cat([specular_features, latent_code], dim=1)
-    #         tint_features = torch.cat([tint_features, latent_code], dim=1)
-    #     if self.cano_view_dir:
-    #         T_fwd = gaussians.fwd_transform
-    #         R_bwd = T_fwd[:, :3, :3].transpose(1, 2)
-    #         normal = torch.matmul(R_bwd, normal.unsqueeze(-1)).squeeze(-1)
-    #         # view_noise_scale = self.cfg.get('view_noise', 0.)
-    #         # if self.training and view_noise_scale > 0.:
-    #         #     view_noise = torch.tensor(augm_rots(view_noise_scale, view_noise_scale, view_noise_scale),
-    #         #                               dtype=torch.float32,
-    #         #                               device=normal.device).transpose(0, 1)
-    #         #     normal = torch.matmul(normal, view_noise)
-    #     normal_embed = self.sh_embed(normal)
-    #     tint_features = torch.cat([tint_features, normal_embed], dim=1)
-    #
-    #     return diffuse_features, specular_features, tint_features
-
     def forward(self, gaussians, camera):
         spatial_features = self.compose_spatial_input(gaussians, camera)
 
@@ -433,9 +329,17 @@ class FusionMLP(ColorPrecompute):
         directional_features = self.compose_directional_input(gaussians, camera, bottleneck_output, roughness_output)
         specular_output = self.color_activation(self.specular_mlp(directional_features))
 
-        # shading_normal_offset prediction
-        # offset -> [-1, 1]
-        # shading_normal_offset = self.shading_normal_offset_activation(self.shading_normal_mlp(directional_features))
+        shading_normal_offset_loss = 0
+        if self.use_shading_normal_offset:
+            # shading_normal_offset prediction
+            # offset -> [-1, 1]
+            shading_normal_offset = self.shading_normal_offset_activation(self.shading_normal_mlp(directional_features))
+            rots = build_rotation(gaussians.get_rotation)
+            # last column as normal
+            rots[:, :, -1] = self.normal_activation(rots[:, :, -1] + shading_normal_offset)
+            gaussians._rotation = matrix_to_quaternion(rots)
+            shading_normal_offset_loss = torch.norm(shading_normal_offset, p=1, dim=1).mean()
+
         # linear composition
         if self.texture_mode == "diffuse":
             # only diffuse
@@ -446,7 +350,6 @@ class FusionMLP(ColorPrecompute):
         else:
             color_precomp = diffuse_output + tint_output * specular_output
 
-        # shading_normal_offset_loss = torch.norm(shading_normal_offset, p=1, dim=1).mean()
 
         # epsilon = 1e-6
         # opacity = torch.clamp(gaussians.get_opacity, epsilon, 1 - epsilon)
@@ -454,7 +357,7 @@ class FusionMLP(ColorPrecompute):
         opacity_constraint = torch.mean(gaussians.get_opacity ** 2 + (1 - gaussians.get_opacity) ** 2)
 
         loss_reg ={
-            # "shading_normal_offset": shading_normal_offset_loss,
+            "shading_normal_offset": shading_normal_offset_loss,
             "opacity_constraint": opacity_constraint
         }
         return color_precomp, loss_reg

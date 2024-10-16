@@ -37,6 +37,8 @@ model:
     ide:
       degree: 5
 
+    use_shading_normal_offset: true
+
 opt:
   feature_lr: 1e-3
   texture_lr: 1e-3
