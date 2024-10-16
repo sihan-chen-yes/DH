@@ -15,6 +15,10 @@ from models import GaussianConverter
 from scene.gaussian_model import GaussianModel
 from dataset import load_dataset
 from utils.dataset_utils import getNerfppNorm
+from utils.graphics_utils import get_TBN_map
+from utils.general_utils import build_rotation
+import cv2
+from pytorch3d.ops.knn import knn_points
 
 class Scene:
 
@@ -76,6 +80,8 @@ class Scene:
     def save(self, iteration):
         point_cloud_path = os.path.join(self.save_dir, "point_cloud/iteration_{}".format(iteration))
         self.gaussians.save_ply(os.path.join(point_cloud_path, "point_cloud.ply"))
+        self.save_mesh_TBN_map()
+        self.save_gaussian_TBN_map()
 
     def save_checkpoint(self, iteration):
         print("\n[ITER {}] Saving Checkpoint".format(iteration))
@@ -91,3 +97,61 @@ class Scene:
         self.converter.load_state_dict(converter_sd)
         # self.converter.optimizer.load_state_dict(converter_opt_sd)
         # self.converter.scheduler.load_state_dict(converter_scd_sd)
+
+    def save_mesh_TBN_map(self):
+        """
+        save TBN map of mesh vertex TBN
+
+        """
+        map_dir = os.path.join(self.save_dir, "TBN_map")
+        if not os.path.exists(map_dir):
+            os.makedirs(map_dir)
+        print("exporting mesh TBN UV map ...")
+        uvs = self.metadata["vertices_uv"]
+        faces = self.metadata["faces"]
+        per_vertex_tangents = self.metadata["per_vertex_tangents"]
+        per_vertex_bitangents = self.metadata["per_vertex_bitangents"]
+        per_vertex_normals = self.metadata["per_vertex_normals"]
+        T_img, B_img, N_img = get_TBN_map(uvs, faces, per_vertex_tangents, per_vertex_bitangents, per_vertex_normals)
+        # Save the image
+        cv2.imwrite(os.path.join(map_dir, 'T_mesh_map.png'), T_img)
+        print("exported mesh T UV map")
+        cv2.imwrite(os.path.join(map_dir, 'B_mesh_map.png'), B_img)
+        print("exported mesh B UV map")
+        cv2.imwrite(os.path.join(map_dir, 'N_mesh_map.png'), N_img)
+        print("exported mesh N UV map")
+
+    def save_gaussian_TBN_map(self):
+        """
+        save TBN map of gaussian vertex TBN
+        replace mesh TBN with neareast gaussian TBN
+        """
+        map_dir = os.path.join(self.save_dir, "TBN_map")
+        if not os.path.exists(map_dir):
+            os.makedirs(map_dir)
+        print("exporting gaussian TBN UV map ...")
+        mesh_vertex = torch.tensor(self.metadata["vertices_xyz"]).float().cuda()
+        gaussian_vertex = self.gaussians.get_xyz
+
+        _, nn_ix, _ = knn_points(mesh_vertex.unsqueeze(0),
+                                 gaussian_vertex.unsqueeze(0),
+                                 K=1,
+                                 return_sorted=True)
+        nn_ix = nn_ix.squeeze(0).squeeze(1)
+        # remove gradient
+        rotations = build_rotation(self.gaussians.get_rotation).detach()
+        # per_vertex TBN w.r.t nearest gaussian TBN
+        per_vertex_tangents = rotations[:, :, 0][nn_ix].cpu().numpy()
+        per_vertex_bitangents = rotations[:, :, 1][nn_ix].cpu().numpy()
+        per_vertex_normals = rotations[:, :, 2][nn_ix].cpu().numpy()
+
+        uvs = self.metadata["vertices_uv"]
+        faces = self.metadata["faces"]
+        T_img, B_img, N_img = get_TBN_map(uvs, faces, per_vertex_tangents, per_vertex_bitangents, per_vertex_normals)
+        # Save the image
+        cv2.imwrite(os.path.join(map_dir, 'T_gaussian_map.png'), T_img)
+        print("exported gaussian T UV map")
+        cv2.imwrite(os.path.join(map_dir, 'B_gaussian_map.png'), B_img)
+        print("exported gaussian B UV map")
+        cv2.imwrite(os.path.join(map_dir, 'N_gaussian_map.png'), N_img)
+        print("exported gaussian N UV map")

@@ -2,18 +2,19 @@ import os
 import sys
 import glob
 import cv2
-from utils.graphics_utils import getWorld2View2, focal2fov, fov2focal
+from utils.graphics_utils import (getWorld2View2, focal2fov, fov2focal, compute_per_face_TBN
+, compute_per_vertex_TBN)
 import numpy as np
 import json
 from utils.dataset_utils import get_02v_bone_transforms, fetchPly, storePly, AABB
 from scene.cameras import Camera
 from utils.camera_utils import freeview_camera
 
-
 import torch
 from torch.utils.data import Dataset
 from scipy.spatial.transform import Rotation
 import trimesh
+from utils.graphics_utils import BasicPointCloud, read_obj
 
 class ZJUMoCapDataset(Dataset):
     def __init__(self, cfg, split='train'):
@@ -71,7 +72,7 @@ class ZJUMoCapDataset(Dataset):
 
         start_frame, end_frame, sampling_rate = frames
 
-        subject_dir = os.path.join(self.root_dir, self.subject)
+        self.subject_dir = os.path.join(self.root_dir, self.subject)
         if split == 'predict':
             predict_seqs = ['gBR_sBM_cAll_d04_mBR1_ch05_view1',
                             'gBR_sBM_cAll_d04_mBR1_ch06_view1',
@@ -79,7 +80,7 @@ class ZJUMoCapDataset(Dataset):
                             'canonical_pose_view1',]
             predict_seq = self.cfg.get('predict_seq', 0)
             predict_seq = predict_seqs[predict_seq]
-            model_files = sorted(glob.glob(os.path.join(subject_dir, predict_seq, '*.npz')))
+            model_files = sorted(glob.glob(os.path.join(self.subject_dir, predict_seq, '*.npz')))
             self.model_files = model_files
             frames = list(reversed(range(-len(model_files), 0)))
             if end_frame == 0:
@@ -89,9 +90,9 @@ class ZJUMoCapDataset(Dataset):
             frames = frames[frame_slice]
         else:
             if self.cfg.get('arah_opt', False):
-                model_files = sorted(glob.glob(os.path.join(subject_dir, 'opt_models/*.npz')))
+                model_files = sorted(glob.glob(os.path.join(self.subject_dir, 'opt_models/*.npz')))
             else:
-                model_files = sorted(glob.glob(os.path.join(subject_dir, 'models/*.npz')))
+                model_files = sorted(glob.glob(os.path.join(self.subject_dir, 'models/*.npz')))
             self.model_files = model_files
             frames = list(range(len(model_files)))
             if end_frame == 0:
@@ -112,15 +113,15 @@ class ZJUMoCapDataset(Dataset):
         self.data = []
         if split == 'predict' or cfg.freeview:
             for cam_idx, cam_name in enumerate(cam_names):
-                cam_dir = os.path.join(subject_dir, cam_name)
+                cam_dir = os.path.join(self.subject_dir, cam_name)
 
                 for d_idx, f_idx in enumerate(frames):
                     model_file = model_files[d_idx]
                     # get dummy gt...
                     # img_file = glob.glob(os.path.join(cam_dir, '*.jpg'))[0]
-                    img_file = os.path.join(subject_dir, '1', '000000.jpg')
+                    img_file = os.path.join(self.subject_dir, '1', '000000.jpg')
                     # mask_file = glob.glob(os.path.join(cam_dir, '*.png'))[0]
-                    mask_file = os.path.join(subject_dir, '1', '000000.png')
+                    mask_file = os.path.join(self.subject_dir, '1', '000000.png')
 
                     self.data.append({
                         'cam_idx': cam_idx,
@@ -133,7 +134,7 @@ class ZJUMoCapDataset(Dataset):
                     })
         else:
             for cam_idx, cam_name in enumerate(cam_names):
-                cam_dir = os.path.join(subject_dir, cam_name)
+                cam_dir = os.path.join(self.subject_dir, cam_name)
                 img_files = sorted(glob.glob(os.path.join(cam_dir, '*.jpg')))[frame_slice]
                 mask_files = sorted(glob.glob(os.path.join(cam_dir, '*.png')))[frame_slice]
 
@@ -167,9 +168,9 @@ class ZJUMoCapDataset(Dataset):
         data_path = data_paths[0]
 
         cano_data = self.get_cano_smpl_verts(data_path)
-        if self.split != 'train':
-            self.metadata = cano_data
-            return
+        # if self.split != 'train':
+        #     self.metadata = cano_data
+        #     return
 
         start, end, step = self.train_frames
         frames = list(range(len(data_paths)))
@@ -193,6 +194,39 @@ class ZJUMoCapDataset(Dataset):
         if self.cfg.train_smpl:
             self.metadata.update(self.get_smpl_data())
 
+        # load UV texture data
+        TBN = self.get_TBN()
+        self.metadata.update(TBN)
+
+    def get_TBN(self):
+        """
+        get per face TBN and per vertex TBN
+        Returns
+        -------
+
+        """
+        subject_dir = os.path.join(self.root_dir, self.subject)
+        obj_file_path = os.path.join(subject_dir, "smpl_uv.obj")
+
+        uv_data = read_obj(obj_file_path)
+
+        # use canonical pose xyz coords !
+        vertices_xyz = self.metadata['cano_mesh'].vertices
+        vertices_uv = uv_data['vertices_uv']
+        faces = uv_data['faces']
+        vertex_neighbors = uv_data['vertex_neighbors']
+        per_face_tangents, per_face_bitangents, per_face_normals = compute_per_face_TBN(vertices_xyz, vertices_uv, faces, None)
+        per_vertex_tangents, per_vertex_bitangents, per_vertex_normals = compute_per_vertex_TBN(vertex_neighbors, per_face_tangents, per_face_bitangents, per_face_normals)
+        uv_data.update({
+            "vertices_xyz": vertices_xyz,
+            "per_face_tangents": per_face_tangents,
+            "per_face_bitangents": per_face_bitangents,
+            "per_face_normals": per_face_normals,
+            "per_vertex_tangents": per_vertex_tangents,
+            "per_vertex_bitangents": per_vertex_bitangents,
+            "per_vertex_normals": per_vertex_normals,
+        })
+        return uv_data
 
     def get_cano_smpl_verts(self, data_path):
         '''
@@ -423,18 +457,71 @@ class ZJUMoCapDataset(Dataset):
             pcd = fetchPly(ply_path)
         else:
             ply_path = os.path.join(self.root_dir, self.subject, 'cano_smpl.ply')
-            try:
-                pcd = fetchPly(ply_path)
-            except:
-                verts = self.metadata['smpl_verts']
-                faces = self.faces
-                mesh = trimesh.Trimesh(vertices=verts, faces=faces)
-                n_points = 50_000
+            # try:
+            #     # speed up reading for next time
+            #     pcd = fetchPly(ply_path)
+            # except:
+            rot_init = self.cfg.get('rot_init', "per_face_TBN")
+            verts = self.metadata['vertices_xyz']
+            faces = self.faces
+            mesh = trimesh.Trimesh(vertices=verts, faces=faces)
+            n_points = 50_000
 
-                xyz = mesh.sample(n_points)
-                rgb = np.ones_like(xyz) * 255
-                storePly(ply_path, xyz, rgb)
+            if rot_init == "per_face_TBN":
+                # per_face_init
+                tangents = self.metadata["per_face_tangents"]
+                bitangents = self.metadata["per_face_bitangents"]
+                normals = self.metadata["per_face_normals"]
 
-                pcd = fetchPly(ply_path)
+                xyz, face_indices = mesh.sample(n_points, return_index=True)
+                pc_tangents = tangents[face_indices]
+                pc_bitangents = bitangents[face_indices]
+                pc_normals = normals[face_indices]
+            else:
+                # per_vertex_init
+                tangents = self.metadata["per_vertex_tangents"]
+                bitangents = self.metadata["per_vertex_bitangents"]
+                normals = self.metadata["per_vertex_normals"]
+
+                xyz, face_indices = mesh.sample(n_points, return_index=True)
+
+                bary_faces = faces[face_indices]
+                v0 = verts[bary_faces[:, 0]]  # (n_points, 3)
+                v1 = verts[bary_faces[:, 1]]
+                v2 = verts[bary_faces[:, 2]]
+
+                v0v1 = v1 - v0
+                v0v2 = v2 - v0
+                v0p = xyz - v0
+
+                # v(v0v1) + w(v0v2) = v0p =>
+                # v(v0v1 * v0v1) + w(v0v2 * v0v1) = v0p * v0v1
+                # v(v0v1 * v0v2) + w(v0v2 * v0v2) = v0p * v0v2
+                # v(d00) + v(d01) = d20
+                # v(d01) + v(d11) = d21
+
+                d00 = np.sum(v0v1 * v0v1, axis=1)
+                d01 = np.sum(v0v1 * v0v2, axis=1)
+                d11 = np.sum(v0v2 * v0v2, axis=1)
+
+                d20 = np.sum(v0p * v0v1, axis=1)
+                d21 = np.sum(v0p * v0v2, axis=1)
+
+                denom = d00 * d11 - d01 * d01
+                v = (d11 * d20 - d01 * d21) / denom
+                w = (d00 * d21 - d01 * d20) / denom
+                u = 1.0 - v - w
+
+                bary_coords = np.stack([u, v, w], axis=1)  # (n_points, 3)
+                bary_coords = np.expand_dims(bary_coords, axis=1) # (n_points, 1, 3)
+                # (n, 1, 3) @ (n, 3, 3)
+                pc_tangents = np.squeeze(np.matmul(bary_coords, tangents[bary_faces]), axis=1)
+                pc_bitangents = np.squeeze(np.matmul(bary_coords, bitangents[bary_faces]), axis=1)
+                pc_normals = np.squeeze(np.matmul(bary_coords, normals[bary_faces]), axis=1)
+
+            rgb = np.ones_like(xyz) * 255
+
+            storePly(ply_path, xyz, rgb, pc_tangents, pc_bitangents, pc_normals)
+            pcd = fetchPly(ply_path)
 
         return pcd
