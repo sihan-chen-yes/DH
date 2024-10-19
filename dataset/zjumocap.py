@@ -480,27 +480,71 @@ class ZJUMoCapDataset(Dataset):
             pcd = fetchPly(ply_path)
         else:
             ply_path = os.path.join(self.root_dir, self.subject, 'cano_smpl.ply')
-            try:
-                # speed up reading for next time
-                pcd = fetchPly(ply_path)
-            except:
-                verts = self.metadata['smpl_verts']
-                faces = self.faces
-                tangents = self.metadata["tangents"]
-                bitangents = self.metadata["bitangents"]
-                normals = self.metadata["normals"]
+            # try:
+            #     # speed up reading for next time
+            #     pcd = fetchPly(ply_path)
+            # except:
+            rot_init = self.cfg.get('rot_init', "per_face_TBN")
+            verts = self.metadata['xyz_coords']
+            faces = self.faces
+            mesh = trimesh.Trimesh(vertices=verts, faces=faces)
+            n_points = 50_000
 
-                mesh = trimesh.Trimesh(vertices=verts, faces=faces)
-                n_points = 50_000
+            if rot_init == "per_face_TBN":
+                # per_face_init
+                tangents = self.metadata["per_face_tangents"]
+                bitangents = self.metadata["per_face_bitangents"]
+                normals = self.metadata["per_face_normals"]
 
                 xyz, face_indices = mesh.sample(n_points, return_index=True)
-                # TODO barycentric interpolation
                 pc_tangents = tangents[face_indices]
                 pc_bitangents = bitangents[face_indices]
                 pc_normals = normals[face_indices]
-                rgb = np.ones_like(xyz) * 255
+            else:
+                # per_vertex_init
+                tangents = self.metadata["per_vertex_tangents"]
+                bitangents = self.metadata["per_vertex_bitangents"]
+                normals = self.metadata["per_vertex_normals"]
 
-                storePly(ply_path, xyz, rgb, pc_tangents, pc_bitangents, pc_normals)
-                pcd = fetchPly(ply_path)
+                xyz, face_indices = mesh.sample(n_points, return_index=True)
+
+                bary_faces = faces[face_indices]
+                v0 = verts[bary_faces[:, 0]]  # (n_points, 3)
+                v1 = verts[bary_faces[:, 1]]
+                v2 = verts[bary_faces[:, 2]]
+
+                v0v1 = v1 - v0
+                v0v2 = v2 - v0
+                v0p = xyz - v0
+
+                # v(v0v1) + w(v0v2) = v0p =>
+                # v(v0v1 * v0v1) + w(v0v2 * v0v1) = v0p * v0v1
+                # v(v0v1 * v0v2) + w(v0v2 * v0v2) = v0p * v0v2
+                # v(d00) + v(d01) = d20
+                # v(d01) + v(d11) = d21
+
+                d00 = np.sum(v0v1 * v0v1, axis=1)
+                d01 = np.sum(v0v1 * v0v2, axis=1)
+                d11 = np.sum(v0v2 * v0v2, axis=1)
+
+                d20 = np.sum(v0p * v0v1, axis=1)
+                d21 = np.sum(v0p * v0v2, axis=1)
+
+                denom = d00 * d11 - d01 * d01
+                v = (d11 * d20 - d01 * d21) / denom
+                w = (d00 * d21 - d01 * d20) / denom
+                u = 1.0 - v - w
+
+                bary_coords = np.stack([u, v, w], axis=1)  # (n_points, 3)
+                bary_coords = np.expand_dims(bary_coords, axis=1) # (n_points, 1, 3)
+                # (n, 1, 3) @ (n, 3, 3)
+                pc_tangents = np.squeeze(np.matmul(bary_coords, tangents[bary_faces]), axis=1)
+                pc_bitangents = np.squeeze(np.matmul(bary_coords, bitangents[bary_faces]), axis=1)
+                pc_normals = np.squeeze(np.matmul(bary_coords, normals[bary_faces]), axis=1)
+
+            rgb = np.ones_like(xyz) * 255
+
+            storePly(ply_path, xyz, rgb, pc_tangents, pc_bitangents, pc_normals)
+            pcd = fetchPly(ply_path)
 
         return pcd
