@@ -2,7 +2,8 @@ import os
 import sys
 import glob
 import cv2
-from utils.graphics_utils import getWorld2View2, focal2fov, fov2focal, compute_tangent_bitangent
+from utils.graphics_utils import (getWorld2View2, focal2fov, fov2focal, compute_per_face_TBN
+, compute_per_vertex_TBN)
 import numpy as np
 import json
 from utils.dataset_utils import get_02v_bone_transforms, fetchPly, storePly, AABB
@@ -71,7 +72,7 @@ class ZJUMoCapDataset(Dataset):
 
         start_frame, end_frame, sampling_rate = frames
 
-        subject_dir = os.path.join(self.root_dir, self.subject)
+        self.subject_dir = os.path.join(self.root_dir, self.subject)
         if split == 'predict':
             predict_seqs = ['gBR_sBM_cAll_d04_mBR1_ch05_view1',
                             'gBR_sBM_cAll_d04_mBR1_ch06_view1',
@@ -79,7 +80,7 @@ class ZJUMoCapDataset(Dataset):
                             'canonical_pose_view1',]
             predict_seq = self.cfg.get('predict_seq', 0)
             predict_seq = predict_seqs[predict_seq]
-            model_files = sorted(glob.glob(os.path.join(subject_dir, predict_seq, '*.npz')))
+            model_files = sorted(glob.glob(os.path.join(self.subject_dir, predict_seq, '*.npz')))
             self.model_files = model_files
             frames = list(reversed(range(-len(model_files), 0)))
             if end_frame == 0:
@@ -89,9 +90,9 @@ class ZJUMoCapDataset(Dataset):
             frames = frames[frame_slice]
         else:
             if self.cfg.get('arah_opt', False):
-                model_files = sorted(glob.glob(os.path.join(subject_dir, 'opt_models/*.npz')))
+                model_files = sorted(glob.glob(os.path.join(self.subject_dir, 'opt_models/*.npz')))
             else:
-                model_files = sorted(glob.glob(os.path.join(subject_dir, 'models/*.npz')))
+                model_files = sorted(glob.glob(os.path.join(self.subject_dir, 'models/*.npz')))
             self.model_files = model_files
             frames = list(range(len(model_files)))
             if end_frame == 0:
@@ -112,15 +113,15 @@ class ZJUMoCapDataset(Dataset):
         self.data = []
         if split == 'predict' or cfg.freeview:
             for cam_idx, cam_name in enumerate(cam_names):
-                cam_dir = os.path.join(subject_dir, cam_name)
+                cam_dir = os.path.join(self.subject_dir, cam_name)
 
                 for d_idx, f_idx in enumerate(frames):
                     model_file = model_files[d_idx]
                     # get dummy gt...
                     # img_file = glob.glob(os.path.join(cam_dir, '*.jpg'))[0]
-                    img_file = os.path.join(subject_dir, '1', '000000.jpg')
+                    img_file = os.path.join(self.subject_dir, '1', '000000.jpg')
                     # mask_file = glob.glob(os.path.join(cam_dir, '*.png'))[0]
-                    mask_file = os.path.join(subject_dir, '1', '000000.png')
+                    mask_file = os.path.join(self.subject_dir, '1', '000000.png')
 
                     self.data.append({
                         'cam_idx': cam_idx,
@@ -133,7 +134,7 @@ class ZJUMoCapDataset(Dataset):
                     })
         else:
             for cam_idx, cam_name in enumerate(cam_names):
-                cam_dir = os.path.join(subject_dir, cam_name)
+                cam_dir = os.path.join(self.subject_dir, cam_name)
                 img_files = sorted(glob.glob(os.path.join(cam_dir, '*.jpg')))[frame_slice]
                 mask_files = sorted(glob.glob(os.path.join(cam_dir, '*.png')))[frame_slice]
 
@@ -198,6 +199,12 @@ class ZJUMoCapDataset(Dataset):
         self.metadata.update(TBN)
 
     def get_TBN(self):
+        """
+        get per face TBN and per vertex TBN
+        Returns
+        -------
+
+        """
         subject_dir = os.path.join(self.root_dir, self.subject)
         obj_file = os.path.join(subject_dir, "smpl_uv.obj")
 
@@ -205,7 +212,7 @@ class ZJUMoCapDataset(Dataset):
         uv_coords = []
         faces = []
 
-        normals = self.metadata['cano_mesh'].face_normals
+        per_face_normals = self.metadata['cano_mesh'].face_normals
         with open(obj_file, 'r') as obj_file:
             for line in obj_file:
                 if line.startswith('v '):
@@ -227,11 +234,20 @@ class ZJUMoCapDataset(Dataset):
                     faces.append({'vertex_indices': vertex_indices, 'uv_indices': uv_indices})
         # use canonical pose xyz coords !
         vertices_xyz = self.metadata['cano_mesh'].vertices
-        tangents, bitangents = compute_tangent_bitangent(vertices_xyz, uv_coords, faces, normals)
+        per_face_tangents, per_face_bitangents, per_face_normals = compute_per_face_TBN(vertices_xyz, uv_coords, faces, per_face_normals)
+        vertex_neighbors = self.metadata['cano_mesh'].vertex_neighbors
+        per_vertex_tangents, per_vertex_bitangents, per_vertex_normals = compute_per_vertex_TBN(vertex_neighbors, per_face_tangents, per_face_bitangents, per_face_normals)
+
         uv_data = {
-            "tangents": tangents,
-            "bitangents": bitangents,
-            "normals": normals
+            "xyz_coords": vertices_xyz,
+            "uv_coords": uv_coords,
+            "faces": faces,
+            "per_face_tangents": per_face_tangents,
+            "per_face_bitangents": per_face_bitangents,
+            "per_face_normals": per_face_normals,
+            "per_vertex_tangents": per_vertex_tangents,
+            "per_vertex_bitangents": per_vertex_bitangents,
+            "per_vertex_normals": per_vertex_normals,
         }
         return uv_data
 
