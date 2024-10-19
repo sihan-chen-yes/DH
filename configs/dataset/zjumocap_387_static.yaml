@@ -38,6 +38,3 @@ dataset:
   white_background: false
   data_device: cuda
   eval: false
-
-  # per_face_TBN per_vertex_TBN
-  rot_init: per_vertex_TBN
