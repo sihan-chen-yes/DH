@@ -107,7 +107,7 @@ class Scene:
         if not os.path.exists(map_dir):
             os.makedirs(map_dir)
         print("exporting mesh TBN UV map ...")
-        uvs = self.metadata["uv_coords"]
+        uvs = self.metadata["vertices_uv"]
         faces = self.metadata["faces"]
         per_vertex_tangents = self.metadata["per_vertex_tangents"]
         per_vertex_bitangents = self.metadata["per_vertex_bitangents"]
@@ -130,7 +130,7 @@ class Scene:
         if not os.path.exists(map_dir):
             os.makedirs(map_dir)
         print("exporting gaussian TBN UV map ...")
-        mesh_vertex = torch.tensor(self.metadata["xyz_coords"]).float().cuda()
+        mesh_vertex = torch.tensor(self.metadata["vertices_xyz"]).float().cuda()
         gaussian_vertex = self.gaussians.get_xyz
 
         _, nn_ix, _ = knn_points(mesh_vertex.unsqueeze(0),
@@ -145,7 +145,7 @@ class Scene:
         per_vertex_bitangents = rotations[:, :, 1][nn_ix].cpu().numpy()
         per_vertex_normals = rotations[:, :, 2][nn_ix].cpu().numpy()
 
-        uvs = self.metadata["uv_coords"]
+        uvs = self.metadata["vertices_uv"]
         faces = self.metadata["faces"]
         T_img, B_img, N_img = get_TBN_map(uvs, faces, per_vertex_tangents, per_vertex_bitangents, per_vertex_normals)
         # Save the image

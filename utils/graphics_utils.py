@@ -86,7 +86,7 @@ def compute_per_face_TBN(vertices, uvs, faces, normals=None):
     epsilon = 1e-8
 
     # iterate faces
-    for face in faces:
+    for face_index, face in enumerate(faces):
         v_indices = face['vertex_indices']
         uv_indices = face['uv_indices']
 
@@ -108,7 +108,7 @@ def compute_per_face_TBN(vertices, uvs, faces, normals=None):
             normal = normal / (np.linalg.norm(normal) + epsilon)
         else:
             # if given normal then just use
-            normal = np.array(normals[v_indices[0]])
+            normal = np.array(normals[face_index])
 
         # Gram-Schmidt orthogonalization
         tangent = tangent - np.dot(tangent, normal) * normal
@@ -167,8 +167,11 @@ def get_TBN_map(uvs, faces, per_vertex_tangents, per_vertex_bitangents, per_vert
         uv_indices = face['uv_indices']
         uv_coords = [uvs[uv_idx] for uv_idx in uv_indices]
         uv0, uv1, uv2 = uv_coords
-        # determinant
+        # S = det|a b| / 2
+        # careful with clock wise
         area = 0.5 * ((uv1[0] - uv0[0]) * (uv2[1] - uv0[1]) - (uv2[0] - uv0[0]) * (uv1[1] - uv0[1]))
+        # S = cross(a, b) / 2 very slow !
+        # area = get_triangle_area(uv0, uv1, uv2)
 
         # Compute the bounding box for the face in UV space
         min_u = min(uv[0] for uv in uv_coords)
@@ -180,8 +183,10 @@ def get_TBN_map(uvs, faces, per_vertex_tangents, per_vertex_bitangents, per_vert
         for u in np.linspace(min_u, max_u, num=interpolation_pts):
             for v in np.linspace(min_v, max_v, num=interpolation_pts):
                 # Barycentric interpolation to check if the point is inside the triangle
-                w0 = ((uv1[1] - uv2[1]) * (u - uv2[0]) - (uv1[0] - uv2[0]) * (v - uv2[1])) / (2 * area)
-                w1 = ((uv2[1] - uv0[1]) * (u - uv2[0]) - (uv2[0] - uv0[0]) * (v - uv2[1])) / (2 * area)
+                w0 = ((uv1[0] - u) * (uv2[1] - v) - (uv2[0] - u) * (uv1[1]- v)) * 0.5 / area
+                # w0 = get_triangle_area([u, v], uv1, uv2) / area
+                w1 = ((uv2[0] - u) * (uv0[1] - v) - (uv0[0] - u) * (uv2[1] - v)) * 0.5 / area
+                # w1 = get_triangle_area([u, v], uv2, uv0) / area
                 w2 = 1 - w0 - w1
 
                 # if inside the target UV space triangle
@@ -213,3 +218,105 @@ def get_TBN_map(uvs, faces, per_vertex_tangents, per_vertex_bitangents, per_vert
                     N_img[y, x] = normal_color
 
     return T_img, B_img, N_img
+
+def get_triangle_area(v0, v1, v2):
+    v0_np = np.array(v0)
+    v1_np = np.array(v1)
+    v2_np = np.array(v2)
+    v0v1 = v1_np - v0_np
+    v0v2 = v2_np - v0_np
+    # prevent wise args not following clockwise
+    return 0.5 * abs(np.cross(v0v1, v0v2))
+
+def read_obj(obj_path):
+    """
+    Parameters
+    ----------
+    obj_path
+
+    Returns
+    -------
+    vertices_uv
+    faces: contains both xyz vertices index and uv vertices index
+    vertex_neighbors: adjacent face index
+    """
+    # careful these xyz positions are not canonical pose xyz positions!
+    vertices_xyz = []
+    vertices_uv = []
+    faces = []
+    vertex_neighbors = []
+
+    with open(obj_path, 'r') as obj_file:
+        for line in obj_file:
+            if line.startswith('v '):
+                _, x, y, z = line.strip().split()
+                vertices_xyz.append([float(x), float(y), float(z)])
+            elif line.startswith('vt '):
+                _, u, v = line.strip().split()
+                vertices_uv.append([float(u), float(v)])
+            elif line.startswith('f '):
+                face_elements = line.strip().split()[1:]
+                vertex_indices = []
+                uv_indices = []
+                for element in face_elements:
+                    parts = element.split('/')
+                    vertex_indices.append(int(parts[0]) - 1)
+                    if len(parts) > 1 and parts[1]:
+                        uv_indices.append(int(parts[1]) - 1)
+                faces.append({'vertex_indices': vertex_indices, 'uv_indices': uv_indices})
+    for i in range(len(vertices_xyz)):
+        vertex_neighbor = []
+        # iterate all faces
+        for j, item in enumerate(faces):
+            # contained in xyz face
+            if i in item['vertex_indices']:
+                vertex_neighbor.append(j)
+        vertex_neighbors.append(vertex_neighbor)
+
+    return {
+        "vertices_uv": vertices_uv,
+        "faces": faces,
+        "vertex_neighbors": vertex_neighbors
+    }
+
+
+# def TBN_render(mesh):
+#     from pytorch3d.renderer import (
+#         RasterizationSettings,
+#         MeshRenderer,
+#         MeshRasterizer,
+#         HardPhongShader,
+#         PerspectiveCameras,
+#         TexturesVertex,
+#         BlendParams,
+#         SoftPhongShader
+#     )
+#     from pytorch3d.structures import Meshes
+#     device = torch.device("cuda:0")
+#     cameras = PerspectiveCameras(device=device)
+#
+#     class NormalsShader(HardPhongShader):
+#         def forward(self, fragments, meshes, **kwargs):
+#             vertex_normals = meshes.verts_normals_packed()
+#             colors = (vertex_normals + 1) / 2
+#
+#             texels = colors[meshes.faces_packed()[fragments.pix_to_face]]
+#
+#             return texels
+#
+#     raster_settings = RasterizationSettings(
+#         image_size=512,
+#         blur_radius=0.0,
+#         faces_per_pixel=1
+#     )
+#
+#     renderer = MeshRenderer(
+#         rasterizer=MeshRasterizer(
+#             cameras=cameras,
+#             raster_settings=raster_settings
+#         ),
+#         shader=NormalsShader(device=device)
+#     )
+#
+#     # 渲染网格
+#     images = renderer(mesh)
