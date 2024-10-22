@@ -14,7 +14,7 @@ import torch
 from torch.utils.data import Dataset
 from scipy.spatial.transform import Rotation
 import trimesh
-from utils.graphics_utils import BasicPointCloud
+from utils.graphics_utils import BasicPointCloud, read_obj
 
 class ZJUMoCapDataset(Dataset):
     def __init__(self, cfg, split='train'):
@@ -206,49 +206,26 @@ class ZJUMoCapDataset(Dataset):
 
         """
         subject_dir = os.path.join(self.root_dir, self.subject)
-        obj_file = os.path.join(subject_dir, "smpl_uv.obj")
+        obj_file_path = os.path.join(subject_dir, "smpl_uv.obj")
 
-        # vertices_xyz = []
-        uv_coords = []
-        faces = []
+        uv_data = read_obj(obj_file_path)
 
-        per_face_normals = self.metadata['cano_mesh'].face_normals
-        with open(obj_file, 'r') as obj_file:
-            for line in obj_file:
-                if line.startswith('v '):
-                    continue
-                    # _, x, y, z = line.strip().split()
-                    # vertices_xyz.append([float(x), float(y), float(z)])
-                elif line.startswith('vt '):
-                    _, u, v = line.strip().split()
-                    uv_coords.append([float(u), float(v)])
-                elif line.startswith('f '):
-                    face_elements = line.strip().split()[1:]
-                    vertex_indices = []
-                    uv_indices = []
-                    for element in face_elements:
-                        parts = element.split('/')
-                        vertex_indices.append(int(parts[0]) - 1)
-                        if len(parts) > 1 and parts[1]:
-                            uv_indices.append(int(parts[1]) - 1)
-                    faces.append({'vertex_indices': vertex_indices, 'uv_indices': uv_indices})
         # use canonical pose xyz coords !
         vertices_xyz = self.metadata['cano_mesh'].vertices
-        per_face_tangents, per_face_bitangents, per_face_normals = compute_per_face_TBN(vertices_xyz, uv_coords, faces, per_face_normals)
-        vertex_neighbors = self.metadata['cano_mesh'].vertex_neighbors
+        vertices_uv = uv_data['vertices_uv']
+        faces = uv_data['faces']
+        vertex_neighbors = uv_data['vertex_neighbors']
+        per_face_tangents, per_face_bitangents, per_face_normals = compute_per_face_TBN(vertices_xyz, vertices_uv, faces, None)
         per_vertex_tangents, per_vertex_bitangents, per_vertex_normals = compute_per_vertex_TBN(vertex_neighbors, per_face_tangents, per_face_bitangents, per_face_normals)
-
-        uv_data = {
-            "xyz_coords": vertices_xyz,
-            "uv_coords": uv_coords,
-            "faces": faces,
+        uv_data.update({
+            "vertices_xyz": vertices_xyz,
             "per_face_tangents": per_face_tangents,
             "per_face_bitangents": per_face_bitangents,
             "per_face_normals": per_face_normals,
             "per_vertex_tangents": per_vertex_tangents,
             "per_vertex_bitangents": per_vertex_bitangents,
             "per_vertex_normals": per_vertex_normals,
-        }
+        })
         return uv_data
 
     def get_cano_smpl_verts(self, data_path):
@@ -485,7 +462,7 @@ class ZJUMoCapDataset(Dataset):
             #     pcd = fetchPly(ply_path)
             # except:
             rot_init = self.cfg.get('rot_init', "per_face_TBN")
-            verts = self.metadata['xyz_coords']
+            verts = self.metadata['vertices_xyz']
             faces = self.faces
             mesh = trimesh.Trimesh(vertices=verts, faces=faces)
             n_points = 50_000
