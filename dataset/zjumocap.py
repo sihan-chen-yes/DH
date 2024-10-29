@@ -2,8 +2,7 @@ import os
 import sys
 import glob
 import cv2
-from utils.graphics_utils import (getWorld2View2, focal2fov, fov2focal, compute_per_face_TBN
-, compute_per_vertex_TBN)
+from utils.graphics_utils import getWorld2View2, focal2fov, fov2focal, compute_per_face_TBN, compute_tbn, compute_per_vertex_TBN, BasicPointCloud, read_obj, GeometryModule, compute_v2uv
 import numpy as np
 import json
 from utils.dataset_utils import get_02v_bone_transforms, fetchPly, storePly, AABB
@@ -14,7 +13,6 @@ import torch
 from torch.utils.data import Dataset
 from scipy.spatial.transform import Rotation
 import trimesh
-from utils.graphics_utils import BasicPointCloud, read_obj
 
 class ZJUMoCapDataset(Dataset):
     def __init__(self, cfg, split='train'):
@@ -207,15 +205,27 @@ class ZJUMoCapDataset(Dataset):
         """
         subject_dir = os.path.join(self.root_dir, self.subject)
         obj_file_path = os.path.join(subject_dir, "smpl_uv.obj")
+        uv_mask_path = os.path.join(subject_dir, "smpl_uv_20200910.png")
 
         uv_data = read_obj(obj_file_path)
-
+        uv_mask = cv2.imread(uv_mask_path, cv2.IMREAD_GRAYSCALE)
+        #TODO
+        uv_mask = uv_mask != 48
         # use canonical pose xyz coords !
         vertices_xyz = self.metadata['cano_mesh'].vertices
         vertices_uv = uv_data['vertices_uv']
         faces = uv_data['faces']
         vertex_neighbors = uv_data['vertex_neighbors']
         per_face_tangents, per_face_bitangents, per_face_normals = compute_per_face_TBN(vertices_xyz, vertices_uv, faces, None)
+        vi = uv_data['vi']
+        vti = uv_data['vti']
+
+        v2uv = compute_v2uv(vertices_xyz.shape[0], np.array(vi), np.array(vti))
+        geo_module = GeometryModule(vi, vertices_uv, vti, v2uv, impaint=True)
+
+        #TODO
+        # per_face_tangents_n, per_face_bitangents_n, per_face_normals_n = compute_tbn(torch.tensor(vertices_xyz), torch.tensor(vertices_uv), torch.tensor(vi), torch.tensor(vti))
+
         per_vertex_tangents, per_vertex_bitangents, per_vertex_normals = compute_per_vertex_TBN(vertex_neighbors, per_face_tangents, per_face_bitangents, per_face_normals)
         uv_data.update({
             "vertices_xyz": vertices_xyz,
@@ -225,6 +235,8 @@ class ZJUMoCapDataset(Dataset):
             "per_vertex_tangents": per_vertex_tangents,
             "per_vertex_bitangents": per_vertex_bitangents,
             "per_vertex_normals": per_vertex_normals,
+            "geo_module": geo_module,
+            "uv_mask": uv_mask,
         })
         return uv_data
 

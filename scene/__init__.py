@@ -112,7 +112,9 @@ class Scene:
         per_vertex_tangents = self.metadata["per_vertex_tangents"]
         per_vertex_bitangents = self.metadata["per_vertex_bitangents"]
         per_vertex_normals = self.metadata["per_vertex_normals"]
-        T_img, B_img, N_img = get_TBN_map(uvs, faces, per_vertex_tangents, per_vertex_bitangents, per_vertex_normals)
+        geo_module = self.metadata["geo_module"]
+        uv_mask = self.metadata["uv_mask"]
+        T_img, B_img, N_img = get_TBN_map(uvs, faces, uv_mask, geo_module, per_vertex_tangents, per_vertex_bitangents, per_vertex_normals)
         # Save the image
         cv2.imwrite(os.path.join(map_dir, 'T_mesh_map.png'), T_img)
         print("exported mesh T UV map")
@@ -147,7 +149,9 @@ class Scene:
 
         uvs = self.metadata["vertices_uv"]
         faces = self.metadata["faces"]
-        T_img, B_img, N_img = get_TBN_map(uvs, faces, per_vertex_tangents, per_vertex_bitangents, per_vertex_normals)
+        geo_module = self.metadata["geo_module"]
+        uv_mask = self.metadata["uv_mask"]
+        T_img, B_img, N_img = get_TBN_map(uvs, faces, uv_mask, geo_module, per_vertex_tangents, per_vertex_bitangents, per_vertex_normals)
         # Save the image
         cv2.imwrite(os.path.join(map_dir, 'T_gaussian_map.png'), T_img)
         print("exported gaussian T UV map")
