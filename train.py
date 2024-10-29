@@ -83,6 +83,7 @@ def training(config):
     ema_loss_for_log = 0.0
     progress_bar = tqdm(range(first_iter, opt.iterations), desc="Training progress")
     first_iter += 1
+    # scene.save_mesh_TBN_map()
     for iteration in range(first_iter, opt.iterations + 1):
 
         iter_start.record()
