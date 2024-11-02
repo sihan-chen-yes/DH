@@ -246,7 +246,7 @@ def validation(iteration, testing_iterations, testing_interval, scene : Scene, e
     scene.eval()
     torch.cuda.empty_cache()
     validation_configs = ({'name': 'test', 'cameras' : list(range(len(scene.test_dataset)))},
-                          {'name': 'train', 'cameras' : [idx for idx in range(0, len(scene.train_dataset), len(scene.train_dataset) // 10)]})
+                          {'name': 'train', 'cameras' : [idx for idx in range(0, len(scene.train_dataset))]})
 
     for config in validation_configs:
         if config['cameras'] and len(config['cameras']) > 0:
