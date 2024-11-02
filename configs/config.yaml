@@ -94,12 +94,12 @@ opt:
   lambda_dir_normal_constraint: 0.1
   cano_space_transformation: true
   # TODO
-  lambda_shading_normal_offset: 0.01
+  lambda_shading_normal_offset: 0.0
 
   lambda_opacity_constraint: 0.0
   opacity_constraint_loss_from: 15000
 
-  lambda_rot_constraint: 0.1
+  lambda_rot_constraint: 0.0
   # densification configs
   percent_dense: 0.01
   densification_interval: 100
