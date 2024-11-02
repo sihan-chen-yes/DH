@@ -157,7 +157,7 @@ class GaussianModel:
         return self.opacity_activation(self._opacity)
     
     def get_covariance(self, scaling_modifier = 1):
-        return self.covariance_activation(self.get_xyz, self.get_scaling, scaling_modifier, self._rotation)
+        return self.covariance_activation(self.get_scaling, scaling_modifier, self._rotation)
 
     def oneupSHdegree(self):
         if not self.use_sh:
@@ -186,7 +186,7 @@ class GaussianModel:
         print("Number of points at initialisation : ", fused_point_cloud.shape[0])
 
         dist2 = torch.clamp_min(distCUDA2(torch.from_numpy(np.asarray(pcd.points)).float().cuda()), 0.0000001)
-        scales = torch.log(torch.sqrt(dist2))[...,None].repeat(1, 2)
+        scales = torch.log(torch.sqrt(dist2))[...,None].repeat(1, 3)
         # init rots as TBN matrix
         tangents = pcd.tangents
         bitangents = pcd.bitangents
@@ -249,7 +249,7 @@ class GaussianModel:
         return l
 
     def save_ply(self, path):
-        mkdir_p(os.path.dirname(path))
+        os.makedirs(os.path.dirname(path))
 
         xyz = self._xyz.detach().cpu().numpy()
         normals = np.zeros_like(xyz)

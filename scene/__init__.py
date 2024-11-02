@@ -14,7 +14,6 @@ import torch
 from models import GaussianConverter
 from scene.gaussian_model import GaussianModel
 from dataset import load_dataset
-from utils.dataset_utils import getNerfppNorm
 from utils.graphics_utils import get_TBN_map
 from utils.general_utils import build_rotation
 import cv2
@@ -46,9 +45,6 @@ class Scene:
         else:
             raise ValueError
 
-        # for multi-view
-        # nerf_normalization = getNerfppNorm(self.test_dataset)
-        # self.cameras_extent = nerf_normalization["radius"]
 
         self.cameras_extent = self.metadata['cameras_extent']
 
