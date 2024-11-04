@@ -47,6 +47,7 @@ class GaussianModel:
 
         # two modes: SH coefficient or feature
         self.use_sh = cfg.use_sh
+        self.rand_rot_init = cfg.get("rand_rot_init", True)
         self.active_sh_degree = 0
         # print('use_sh or not', self.use_sh)
         if self.use_sh:
@@ -193,7 +194,11 @@ class GaussianModel:
         bitangents = pcd.bitangents
         normals = pcd.normals
         rot_matrix = torch.tensor(np.stack((tangents, bitangents, normals), axis=-1)).cuda()
-        rot_quaternion = nn.functional.normalize(matrix_to_quaternion(rot_matrix))
+        if self.rand_rot_init:
+            rot_quaternion = torch.zeros((fused_point_cloud.shape[0], 4), device="cuda")
+            rot_quaternion[:, 0] = 1
+        else:
+            rot_quaternion = nn.functional.normalize(matrix_to_quaternion(rot_matrix))
         # log init quaternion for regularization
         self._init_rot_quaternion = rot_quaternion
         opacities = self.inverse_opacity_activation(0.1 * torch.ones((fused_point_cloud.shape[0], 1), dtype=torch.float, device="cuda"))
