@@ -21,7 +21,7 @@ from simple_knn._C import distCUDA2
 from utils.graphics_utils import BasicPointCloud
 from utils.general_utils import strip_symmetric, build_scaling_rotation
 from pytorch3d.transforms import matrix_to_quaternion
-
+from utils.system_utils import mkdir_p
 import trimesh
 import igl
 
@@ -254,8 +254,8 @@ class GaussianModel:
         return l
 
     def save_ply(self, path):
-        os.makedirs(os.path.dirname(path))
-
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        
         xyz = self._xyz.detach().cpu().numpy()
         normals = np.zeros_like(xyz)
         f_dc = self._features_dc.detach().transpose(1, 2).flatten(start_dim=1).contiguous().cpu().numpy()
