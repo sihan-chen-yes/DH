@@ -23,6 +23,7 @@ model:
     use_sh: true
     sh_degree: 3
     delay: 1000
+    rand_rot_init: true
   pose_correction:
     name: direct
   deformer:

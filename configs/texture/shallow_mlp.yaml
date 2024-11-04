@@ -14,7 +14,7 @@ model:
     use_cov: false
     use_normal: false
     sh_degree: 3
-    non_rigid_dim: 16
+    non_rigid_dim: 0
     latent_dim: 16
 
     cano_view_dir: true
