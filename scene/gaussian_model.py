@@ -21,7 +21,6 @@ from simple_knn._C import distCUDA2
 from utils.graphics_utils import BasicPointCloud
 from utils.general_utils import strip_symmetric, build_scaling_rotation
 from pytorch3d.transforms import matrix_to_quaternion
-from utils.system_utils import mkdir_p
 import trimesh
 import igl
 
@@ -195,7 +194,7 @@ class GaussianModel:
         rot_matrix = torch.tensor(np.stack((tangents, bitangents, normals), axis=-1)).cuda()
         if self.rand_rot_init:
             rot_quaternion = torch.zeros((fused_point_cloud.shape[0], 4), device="cuda")
-            rot_quaternion[:, 0] = 1
+            # rot_quaternion[:, 0] = 1
         else:
             rot_quaternion = nn.functional.normalize(matrix_to_quaternion(rot_matrix))
         # log init quaternion for regularization
